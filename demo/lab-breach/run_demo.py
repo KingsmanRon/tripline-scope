@@ -25,8 +25,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
-PASSWORD = "Synthetic-Pass-2026!"
-SQL_SA_PASSWORD_ENV = "TSCOPE_DEMO_MSSQL_PASSWORD"
+PASSWORD = "Synthetic-Pass-2026!"  # noqa: S105 - synthetic demo account
+SQL_SA_PASSWORD_ENV = "TSCOPE_DEMO_MSSQL_PASSWORD"  # noqa: S105 - env var name
 
 console: list[str] = []
 timings: dict[str, float] = {}

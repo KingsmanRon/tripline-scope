@@ -23,6 +23,7 @@ COMMAND_MODULES = [
     "tripline_scope.paths.cli",
     "tripline_scope.scope.cli",
     "tripline_scope.readiness.cli",
+    "tripline_scope.readiness.report",
 ]
 
 
