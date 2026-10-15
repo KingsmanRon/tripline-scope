@@ -77,6 +77,8 @@ EVENT_SCHEMA = pa.schema([
     ("ts_utc_max", pa.timestamp("us", tz="UTC")),   # latest supported UTC instant
     ("objects", pa.list_(pa.string())),   # every object named by the record ("db.schema.table")
     ("event_code", pa.string()),          # Windows event id, SQL audit action id, Entra error code...
+    ("client_host", pa.string()),         # client workstation/host name as logged (SQL host_name, 4624 WorkstationName)
+    ("correlation_id", pa.string()),      # identity-provider correlation id (Entra) or equivalent
     ("dest_ip", pa.string()),
     ("dest_port", pa.int32()),
     ("assigned_ip", pa.string()),         # VPN-assigned address
