@@ -11,3 +11,4 @@ dist/
 /bundle/out/
 .tscope_session
 /.claude/
+/demo/lab-breach/out/
