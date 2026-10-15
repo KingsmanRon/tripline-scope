@@ -64,7 +64,7 @@ def connect(target: Target, database: str = "master", *, timeout: float | None =
             raise ConfigError("encryption: true needs pyOpenSSL for python-tds, which this bundle does not ship; "
                               "keep the restore server on an isolated segment or add pyOpenSSL (Apache-2.0)")
     try:
-        return pytds.connect(server=target.host, port=target.port, database=database, user=target.login,
+        return pytds.connect(dsn=target.host, port=target.port, database=database, user=target.login,
                              password=target.password(), autocommit=True, login_timeout=target.login_timeout_s,
                              timeout=timeout, appname=APP_NAME, readonly=readonly, bytes_to_unicode=True,
                              disable_connect_retry=True)
@@ -104,6 +104,7 @@ def _transfer(target: Target, src_path: str, db: str) -> tuple[str, str | None]:
     c = target.container
     _docker(["exec", "-u", "root", c, "mkdir", "-p", base])
     _docker(["exec", "-u", "root", c, "chown", "mssql", base])
+    _docker(["exec", "-u", "root", c, "chmod", "0700", base])
     _docker(["cp", src_path, f"{c}:{dest}"])
     _docker(["exec", "-u", "root", c, "chown", "mssql", dest])
     _docker(["exec", "-u", "root", c, "chmod", "0400", dest])

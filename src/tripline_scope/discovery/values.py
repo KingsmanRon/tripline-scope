@@ -99,8 +99,8 @@ def digits_of(value: str) -> str:
 
 def padded_id(value: str, pad: bool) -> str:
     d = digits_of(value)
-    if pad and len(d) == 12 and d.isdigit():
-        return "0" + d
+    if pad and len(d) in (10, 11, 12) and d.isdigit():
+        return d.rjust(13, "0")
     return d
 
 
@@ -229,7 +229,7 @@ def null_sql(v: str) -> str:
 
 def id_digits_sql(v: str, pad: bool) -> str:
     if pad:
-        return (f"(CASE WHEN regexp_full_match(tscope_digits({v}), '[0-9]{{12}}') THEN '0' || tscope_digits({v}) "
+        return (f"(CASE WHEN regexp_full_match(tscope_digits({v}), '[0-9]{{10,12}}') THEN lpad(tscope_digits({v}), 13, '0') "
                 f"ELSE tscope_digits({v}) END)")
     return f"tscope_digits({v})"
 
