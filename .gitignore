@@ -10,3 +10,4 @@ dist/
 /bench/out/
 /bundle/out/
 .tscope_session
+/.claude/
