@@ -6,8 +6,10 @@ Method (all counts over *usable* identity rows; unresolvable rows are counted se
 * rows without an ID are keyed by passport number, else by (sorted soundex of first name and surname, date of
   birth); a key already carried by an ID row is the same person and is not counted again;
 * point estimate = distinct IDs + distinct new keys;
-* lower bound = distinct IDs + distinct (surname soundex, date of birth) keys among rows without an ID that are not
-  already carried by an ID row (merges more aggressively than the final matcher);
+* lower bound = connected components over *all* usable rows, ID rows included, where rows are joined when they
+  share any of: SA ID, (surname soundex, date of birth), or (sorted name-soundex pair, birth year). This merges far
+  more aggressively than the final matcher (it also joins different people who happen to share these keys), so
+  it under-counts; one person carrying two different valid ID numbers after a keying error is still merged;
 * upper bound = distinct IDs + distinct exact (first name, surname, date of birth / passport) keys among rows
   without an ID, with no overlap removal (splits more than the final matcher).
 
@@ -30,6 +32,8 @@ SELECT i.row_id, i.sa_id,
   'N:' || coalesce(least(i.sx_first, i.sx_last), '') || '|' || coalesce(greatest(i.sx_first, i.sx_last), '')
        || '|' || coalesce(strftime(i.dob_eff, '%Y%m%d'), '') AS k_name,
   'C:' || coalesce(i.sx_last, '') || '|' || coalesce(strftime(i.dob_eff, '%Y%m%d'), '') AS k_coarse,
+  'Y:' || coalesce(least(i.sx_first, i.sx_last), '') || '|' || coalesce(greatest(i.sx_first, i.sx_last), '')
+       || '|' || coalesce(strftime(i.dob_eff, '%Y'), '') AS k_coarse_year,
   coalesce('P:' || i.passport, 'F:' || coalesce(i.first, '') || '|' || coalesce(i.last, '') || '|'
        || coalesce(strftime(i.dob_eff, '%Y%m%d'), '')) AS k_fine,
   i.cat_own | coalesce(d.dep_mask, 0) AS cat_mask
@@ -40,6 +44,27 @@ WHERE i.usable
 """
 
 
+def _aggressive_components(con, max_iter: int = 12) -> int:
+    """Count connected components of est_sub rows linked by any shared aggressive key (label propagation).
+    Stopping early can only leave components split, i.e. a larger count; iterations continue until stable."""
+    con.execute("""CREATE OR REPLACE TEMP TABLE est_lab AS
+        SELECT row_id, coalesce('I:' || sa_id, 'R:' || row_id::VARCHAR) AS k1, k_coarse AS k2, k_coarse_year AS k3,
+               row_id AS lab FROM est_sub""")
+    prev = None
+    for _ in range(max_iter):
+        con.execute("""CREATE OR REPLACE TEMP TABLE est_lab AS
+            WITH a AS (SELECT k1, min(lab) m FROM est_lab GROUP BY k1),
+                 b AS (SELECT k2, min(lab) m FROM est_lab GROUP BY k2),
+                 c AS (SELECT k3, min(lab) m FROM est_lab GROUP BY k3)
+            SELECT e.row_id, e.k1, e.k2, e.k3, least(e.lab, a.m, b.m, c.m) AS lab
+            FROM est_lab e JOIN a USING (k1) JOIN b USING (k2) JOIN c USING (k3)""")
+        n = con.execute("SELECT count(DISTINCT lab) FROM est_lab").fetchone()[0]
+        if n == prev:
+            break
+        prev = n
+    return int(prev)
+
+
 def _counts(data: ScopeData, where: str) -> dict:
     con = data.con
     con.execute(f"CREATE OR REPLACE TEMP TABLE est_sub AS SELECT * FROM est_rows WHERE {where}")
@@ -47,11 +72,10 @@ def _counts(data: ScopeData, where: str) -> dict:
     point = con.execute("""
         SELECT count(DISTINCT s.k_point) FROM est_sub s
         WHERE s.sa_id IS NULL AND NOT EXISTS (SELECT 1 FROM est_id_names n WHERE n.k = s.k_point)""").fetchone()[0]
-    lower = con.execute("""
-        SELECT count(DISTINCT s.k_coarse) FROM est_sub s
-        WHERE s.sa_id IS NULL AND NOT EXISTS (SELECT 1 FROM est_id_coarse n WHERE n.k = s.k_coarse)""").fetchone()[0]
+    lower = _aggressive_components(con)
     upper = con.execute("SELECT count(DISTINCT k_fine) FROM est_sub WHERE sa_id IS NULL").fetchone()[0]
-    return {"point": int(n_id + point), "lower": int(n_id + lower), "upper": int(n_id + upper),
+    point = int(n_id + point)
+    return {"point": point, "lower": int(min(lower, point)), "upper": int(n_id + upper),
             "people_with_valid_sa_id": int(n_id)}
 
 
@@ -59,8 +83,6 @@ def estimate(data: ScopeData) -> dict:
     con = data.con
     con.execute(KEYS_SQL)
     con.execute("CREATE OR REPLACE TEMP TABLE est_id_names AS SELECT DISTINCT k_name AS k FROM est_rows WHERE sa_id IS NOT NULL")
-    con.execute("CREATE OR REPLACE TEMP TABLE est_id_coarse AS SELECT DISTINCT k_coarse AS k FROM est_rows "
-                "WHERE sa_id IS NOT NULL")
     total = _counts(data, "TRUE")
     per_cat = {}
     for c in EXPOSURE_CATEGORIES:
