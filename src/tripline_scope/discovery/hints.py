@@ -117,5 +117,11 @@ def name_hint(column: str, table: str = "") -> str | None:
         return "test_result"
     for cat, rx in _COMPILED:
         if rx.search(tok):
+            if cat in _ID_SUFFIX_DEMOTES and _ID_SUFFIX.search(tok):
+                return "other_identifier"      # ResultID, note_id, diagnosis_no: keys, not clinical content
             return cat
     return None
+
+
+_ID_SUFFIX = re.compile(r"_(?:id|key|no|nr|num|number|seq|guid|uuid)$")
+_ID_SUFFIX_DEMOTES = {"test_result", "clinical_free_text", "icd10", "record_date"}

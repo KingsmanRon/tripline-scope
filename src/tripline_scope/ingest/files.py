@@ -15,6 +15,7 @@ import codecs
 import csv
 import io
 import json
+import re
 import zipfile
 from collections.abc import Iterator
 from pathlib import PurePath
@@ -23,6 +24,7 @@ import pyarrow as pa
 
 from tripline_scope.core import custody
 from tripline_scope.core.errors import ConfigError
+from tripline_scope.core.redact import find_identifier_like
 
 from .config import IngestLimits
 from .model import ColumnInfo, TableRef, batch_from_columns, to_str
@@ -43,6 +45,26 @@ def _dedupe(names: list[str]) -> list[str]:
             seen[k] = 1
         out.append(n[:128])
     return out
+
+
+def header_looks_like_data(cells: list) -> bool:
+    """A first row holding identifier-like values, e-mails, dates or bare numbers is data, not a header
+    (header-less exports and leak samples): such files get positional column names so values never become
+    column names in outputs."""
+    for c in cells:
+        s = str(c or "").strip()
+        if not s:
+            continue
+        if find_identifier_like(s) or "@" in s or re.fullmatch(r"[+\d\s\-/.:()]{4,}", s):
+            return True
+    return False
+
+
+def safe_name(name: str, position: int) -> str:
+    s = str(name)
+    if find_identifier_like(s) or "@" in s or re.fullmatch(r"[+\d\s\-/.:()]{4,}", s.strip()):
+        return f"column_{position + 1}"
+    return s
 
 
 def _sniff_encoding(head: bytes) -> str:
@@ -163,10 +185,12 @@ class FileReader:
             header = next(csv.reader([first], delimiter=delim))
         except (csv.Error, StopIteration):
             raise ConfigError(f"file {f['name']}: header row could not be parsed") from None
-        cols = [ColumnInfo(n, "text") for n in _dedupe(header)]
+        headerless = header_looks_like_data(header)
+        names = [f"column_{i + 1}" for i in range(len(header))] if headerless else _dedupe(header)
+        cols = [ColumnInfo(n, "text") for n in names]
         if not cols:
             raise ConfigError(f"file {f['name']}: no header row")
-        return TableRef(stem, cols, handle={"file": f, "delimiter": delim}, kind="file")
+        return TableRef(stem, cols, handle={"file": f, "delimiter": delim, "headerless": headerless}, kind="file")
 
     def _csv_batches(self, table: TableRef, batch_rows: int, limit: int | None):
         f, delim = table.handle["file"], table.handle["delimiter"]
@@ -176,10 +200,11 @@ class FileReader:
         cols: list[list[str | None]] = [[] for _ in range(ncols)]
         try:
             reader = csv.reader(text, delimiter=delim, quotechar='"', strict=False)
-            try:
-                next(reader)  # header
-            except StopIteration:
-                return
+            if not table.handle.get("headerless"):
+                try:
+                    next(reader)  # header
+                except StopIteration:
+                    return
             while True:
                 try:
                     rec = next(reader)
@@ -260,7 +285,7 @@ class FileReader:
                     continue
                 while header and not header[-1]:
                     header.pop()
-                names = _dedupe(header)
+                names = _dedupe([safe_name(h, i) for i, h in enumerate(header)])
                 cols = []
                 for i, n in enumerate(names):
                     vals = [r[i] for r in peek if i < len(r) and r[i] is not None]
@@ -357,7 +382,8 @@ class FileReader:
         if not keys:
             raise ConfigError(f"file {f['name']}: no JSON objects found")
         names = list(keys)
-        return TableRef(stem, [ColumnInfo(k[:128], "json") for k in names], handle={"file": f, "keys": names},
+        shown = _dedupe([safe_name(k[:128], i) for i, k in enumerate(names)])
+        return TableRef(stem, [ColumnInfo(k, "json") for k in shown], handle={"file": f, "keys": names},
                         kind="file")
 
     def _jsonl_table(self, f: dict, stem: str) -> TableRef:
