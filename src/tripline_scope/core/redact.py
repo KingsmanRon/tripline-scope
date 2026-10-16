@@ -14,6 +14,11 @@ _DIGIT_RUN = re.compile(r"(?<![0-9])(?:\d[\s\-]?){12,18}\d(?![0-9])")
 _EMAIL = re.compile(r"[A-Za-z0-9._%+'\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 _PHONE = re.compile(r"(?<![0-9A-Za-z])(?:\+27|0027|\b0)[\s\-]?[1-8](?:[\s\-]?\d){8}(?![0-9])")
 _SECRETISH = re.compile(r"(?i)(password|pwd|secret|token|api[_-]?key)\s*[=:]\s*[^\s;,'\"]+")
+# A maximal hex token of digest length (MD5/SHA-1/SHA-256/SHA-512) containing at least one a-f letter is a hash:
+# decimal runs inside it only resemble IDs, cards or phone numbers by coincidence (about 0.15% of SHA-256 values).
+_HASH_TOKEN = re.compile(
+    r"(?<![0-9A-Za-z])(?=[0-9a-fA-F]*[a-fA-F])(?:[0-9a-fA-F]{128}|[0-9a-fA-F]{64}|[0-9a-fA-F]{40}|[0-9a-fA-F]{32})"
+    r"(?![0-9A-Za-z])")
 
 REDACTED = "[redacted]"
 
@@ -25,20 +30,33 @@ def _digit_sub(m: re.Match) -> str:
     return m.group(0)
 
 
-def scrub_text(text: str | None) -> str:
-    """Remove SA-ID-like, card-like, email, SA phone and ``password=...`` patterns from free text."""
-    if not text:
-        return text or ""
-    text = _SECRETISH.sub(lambda m: m.group(1) + "=" + REDACTED, text)
+def _scrub_segment(text: str) -> str:
     text = _EMAIL.sub(REDACTED, text)
     text = _DIGIT_RUN.sub(_digit_sub, text)
     text = _PHONE.sub(REDACTED, text)
     return text
 
 
+def scrub_text(text: str | None) -> str:
+    """Remove SA-ID-like, card-like, email, SA phone and ``password=...`` patterns from free text.
+
+    Digest-shaped hex tokens (hashes) are left intact."""
+    if not text:
+        return text or ""
+    text = _SECRETISH.sub(lambda m: m.group(1) + "=" + REDACTED, text)
+    out, pos = [], 0
+    for m in _HASH_TOKEN.finditer(text):
+        out.append(_scrub_segment(text[pos:m.start()]))
+        out.append(m.group(0))
+        pos = m.end()
+    out.append(_scrub_segment(text[pos:]))
+    return "".join(out)
+
+
 def find_identifier_like(text: str) -> list[str]:
     """Kinds of identifier-like content present in ``text`` (used by leak tests and output guards)."""
     kinds = []
+    text = _HASH_TOKEN.sub(" ", text)
     if _EMAIL.search(text):
         kinds.append("email")
     for m in _DIGIT_RUN.finditer(text):
