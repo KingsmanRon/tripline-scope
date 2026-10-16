@@ -71,11 +71,11 @@ class Matcher:
         con.execute(f"""
         CREATE OR REPLACE TABLE recs AS
         WITH r AS (
-          SELECT i.row_id AS rid, i.row_key, i.first, i.middle, i.last, i.maiden, i.sa_id, i.passport, i.dob_eff,
-                 i.dob_consistent, i.sex, i.phone, i.phone_alt, i.email, i.postal, i.med, i.guardian_sa_id,
+          SELECT i.row_id AS rid, i.row_key, i.first, i.first_c, i.middle, i.last, i.maiden, i.sa_id, i.passport,
+                 i.dob_eff, i.dob_chk, i.dob_consistent, i.sex, i.phone, i.phone_alt, i.email, i.postal, i.med, i.guardian_sa_id,
                  i.sx_first, i.sx_last, i.sx_maiden,
                  least(i.sx_first, i.sx_last) || greatest(i.sx_first, i.sx_last) AS sx_pair,
-                 year(i.dob_eff) AS birth_year
+                 year(i.dob_eff) AS birth_year, strftime(i.dob_eff, '%m%d') AS birthday
           FROM ident i JOIN (SELECT DISTINCT rid FROM rec_rows) k ON k.rid = i.row_id)
         SELECT r.*,
           CASE WHEN count(*) OVER (PARTITION BY phone) <= {maxb} THEN phone END AS phone_blk,
@@ -114,8 +114,7 @@ class Matcher:
             del cond
             return lvl
 
-        swapped = (f"jaro_winkler_similarity(first_l, last_r) >= {hi} AND "
-                   f"jaro_winkler_similarity(last_l, first_r) >= {hi}")
+        swapped = swapped_sql("first_l", "last_l", "first_r", "last_r", lo, hi)
         comparisons = [
             cl.CustomComparison(output_column_name="sa_id", comparison_levels=[
                 cll.NullLevel("sa_id"), cll.ExactMatchLevel("sa_id"), cll.ElseLevel()]),
@@ -123,7 +122,7 @@ class Matcher:
                 cll.NullLevel("passport"), cll.ExactMatchLevel("passport"), cll.ElseLevel()]),
             cl.CustomComparison(output_column_name="first", comparison_levels=[
                 cll.NullLevel("first"),
-                cll.ExactMatchLevel("first", term_frequency_adjustments="first" in tf),
+                cll.ExactMatchLevel("first_c", term_frequency_adjustments="first" in tf),
                 cll.CustomLevel(swapped, label_for_charts="first name and surname swapped"),
                 cll.CustomLevel("list_contains(string_split(coalesce(middle_r, ''), ' '), first_l) OR "
                                 "list_contains(string_split(coalesce(middle_l, ''), ' '), first_r)",
@@ -145,10 +144,8 @@ class Matcher:
             cl.CustomComparison(output_column_name="dob", comparison_levels=[
                 cll.NullLevel("dob_eff"),
                 cll.ExactMatchLevel("dob_eff"),
-                cll.CustomLevel("damerau_levenshtein(strftime(dob_eff_l, '%Y%m%d'), strftime(dob_eff_r, '%Y%m%d')) <= 1 "
-                                "OR (year(dob_eff_l) = year(dob_eff_r) AND month(dob_eff_l) = day(dob_eff_r) "
-                                "AND day(dob_eff_l) = month(dob_eff_r))",
-                                label_for_charts="one-character slip or day/month swap"),
+                cll.CustomLevel("tscope_dob_slip(dob_eff_l, dob_eff_r)",
+                                label_for_charts="slip: one character, one day, day/month swap or one year"),
                 cll.CustomLevel("year(dob_eff_l) = year(dob_eff_r)", label_for_charts="same year"),
                 cll.ElseLevel()]),
             cl.CustomComparison(output_column_name="sex", comparison_levels=[
@@ -176,6 +173,8 @@ class Matcher:
             "phone": [block_on("phone_blk")],
             "email": [block_on("email_blk")],
             "soundex_names_birth_year": [block_on("sx_pair", "birth_year")],
+            "soundex_first_dob": [block_on("sx_first", "dob_eff")],
+            "soundex_names_birthday": [block_on("sx_pair", "birthday")],
         }
         rules = []
         for r in self.cfg["blocking"]["rules"]:
@@ -259,30 +258,27 @@ class Matcher:
         CREATE OR REPLACE TABLE pairs AS
         SELECT p.rid_l, p.rid_r, p.match_probability, l.row_key AS key_l, r.row_key AS key_r,
           (l.sa_id IS NOT NULL AND r.sa_id IS NOT NULL AND l.sa_id <> r.sa_id) AS g_sa,
-          (l.first IS NOT NULL AND r.first IS NOT NULL AND NOT (
-              l.first = r.first OR jaro_winkler_similarity(l.first, r.first) >= {lo}
-              OR (jaro_winkler_similarity(l.first, r.last) >= {hi} AND jaro_winkler_similarity(l.last, r.first) >= {hi})
-              OR list_contains(string_split(coalesce(r.middle, ''), ' '), l.first)
-              OR list_contains(string_split(coalesce(l.middle, ''), ' '), r.first)
-              OR ((length(l.first) = 1 OR length(r.first) = 1) AND left(l.first, 1) = left(r.first, 1)))) AS g_first,
-          (l.dob_eff IS NOT NULL AND r.dob_eff IS NOT NULL AND l.dob_eff <> r.dob_eff
-            AND damerau_levenshtein(strftime(l.dob_eff, '%Y%m%d'), strftime(r.dob_eff, '%Y%m%d')) > 1
-            AND NOT (year(l.dob_eff) = year(r.dob_eff) AND month(l.dob_eff) = day(r.dob_eff)
-                     AND day(l.dob_eff) = month(r.dob_eff))) AS g_dob,
+          (l.first IS NOT NULL AND r.first IS NOT NULL AND NOT ({first_compatible_sql("l", "r", lo, hi)})) AS g_first,
+          (l.dob_chk IS NOT NULL AND r.dob_chk IS NOT NULL AND NOT tscope_dob_slip(l.dob_chk, r.dob_chk)
+            AND NOT coalesce(l.sa_id = r.sa_id, false)) AS g_dob_any,
           (l.guardian_sa_id IS NOT NULL AND l.guardian_sa_id = r.sa_id)
-            OR (r.guardian_sa_id IS NOT NULL AND r.guardian_sa_id = l.sa_id) AS g_guardian
+            OR (r.guardian_sa_id IS NOT NULL AND r.guardian_sa_id = l.sa_id) AS g_guardian,
+          abs(year(l.dob_chk) - year(r.dob_chk)) >= 2 AS years_apart
         FROM pred p JOIN recs l ON l.rid = p.rid_l JOIN recs r ON r.rid = p.rid_r""")
+        con.execute("""CREATE OR REPLACE TABLE pairs AS SELECT * EXCLUDE (g_dob_any, years_apart),
+                       coalesce(g_dob_any AND NOT coalesce(years_apart, false), false) AS g_dob,
+                       coalesce(g_dob_any AND coalesce(years_apart, false), false) AS g_dob_years
+                       FROM pairs""")
 
         def act(name, col):
             v = g.get(name, "off")
             return v, col
 
-        non_link = [c for v, c in (act("first_name_contradiction", "g_first"), act("different_valid_sa_id", "g_sa"),
-                                   act("guardian_relationship", "g_guardian"), act("dob_contradiction", "g_dob"))
-                    if v == "non_link"]
-        to_review = [c for v, c in (act("first_name_contradiction", "g_first"), act("different_valid_sa_id", "g_sa"),
-                                    act("guardian_relationship", "g_guardian"), act("dob_contradiction", "g_dob"))
-                     if v == "review"]
+        guards = [act("first_name_contradiction", "g_first"), act("different_valid_sa_id", "g_sa"),
+                  act("guardian_relationship", "g_guardian"), act("dob_contradiction", "g_dob"),
+                  act("dob_years_apart", "g_dob_years")]
+        non_link = [c for v, c in guards if v == "non_link"]
+        to_review = [c for v, c in guards if v == "review"]
         nl = " OR ".join(non_link) or "FALSE"
         rv = " OR ".join(to_review) or "FALSE"
         con.execute(f"""
@@ -294,24 +290,18 @@ class Matcher:
                ELSE 'non_link' END AS band,
           CASE WHEN {nl} OR ({rv}) THEN
             array_to_string(list_filter(['first_name_contradiction', 'different_valid_sa_id', 'guardian_relationship',
-                                         'dob_contradiction'], (x, i) -> [g_first, g_sa, g_guardian, g_dob][i]), ',')
+                                         'dob_contradiction', 'dob_years_apart'],
+                                        (x, i) -> [g_first, g_sa, g_guardian, g_dob, g_dob_years][i]), ',')
           END AS guard
         FROM pairs ORDER BY rid_l, rid_r""")
         con.execute("DROP TABLE pairs")
         con.execute("ALTER TABLE pairs2 RENAME TO pairs")
-        # replay review decisions (keyed by HMAC of the record-key pair)
-        keys = con.execute("SELECT key_l, key_r FROM pairs WHERE band <> 'non_link' OR guard IS NOT NULL").fetchall()
-        dec_rows = []
-        for kl, kr in keys:
-            pk = self.pair_key(kl, kr)
-            dd = self.decisions.get(pk)
-            dec_rows.append([kl, kr, pk, dd["decision"] if dd else None])
-        con.execute("CREATE OR REPLACE TABLE pair_dec(key_l VARCHAR, key_r VARCHAR, pair_key VARCHAR, decision VARCHAR)")
-        if dec_rows:
-            con.executemany("INSERT INTO pair_dec VALUES (?, ?, ?, ?)", dec_rows)
+        # replay review decisions (identified by an HMAC of the record-key pair; matched on the key pair)
+        self._load_decisions()
         con.execute("""
         CREATE OR REPLACE TABLE pairs_final AS
-        SELECT p.*, d.pair_key, d.decision FROM pairs p LEFT JOIN pair_dec d USING (key_l, key_r)
+        SELECT p.*, d.pair_key, d.decision FROM pairs p
+        LEFT JOIN decisions d ON d.key_a = least(p.key_l, p.key_r) AND d.key_b = greatest(p.key_l, p.key_r)
         ORDER BY p.rid_l, p.rid_r""")
         s = dict(con.execute("SELECT band, count(*) FROM pairs_final GROUP BY band").fetchall())
         self.stats["pairs_auto"] = int(s.get("auto", 0))
@@ -319,6 +309,23 @@ class Matcher:
         self.stats["pairs_guarded_non_link"] = con.execute(
             "SELECT count(*) FROM pairs_final WHERE band = 'non_link' AND guard IS NOT NULL").fetchone()[0]
         self._t("classify", t0)
+
+    def _load_decisions(self) -> None:
+        import pyarrow as pa
+
+        rows = {"key_a": [], "key_b": [], "pair_key": [], "decision": []}
+        for pk, d in sorted(self.decisions.items()):
+            if d.get("decision") not in ("same", "different"):
+                continue
+            a, b = sorted((d["key_l"], d["key_r"]))
+            rows["key_a"].append(a)
+            rows["key_b"].append(b)
+            rows["pair_key"].append(pk)
+            rows["decision"].append(d["decision"])
+        tb = pa.table(rows, schema=pa.schema([(k, pa.string()) for k in rows]))
+        self.con.register("_dec", tb)
+        self.con.execute("CREATE OR REPLACE TABLE decisions AS SELECT * FROM _dec")
+        self.con.unregister("_dec")
 
     # ------------------------------------------------------------------------------------------ clustering
     def _components(self, edges_sql: str, out: str) -> None:
@@ -360,12 +367,10 @@ class Matcher:
         con.execute("""
         CREATE OR REPLACE TABLE comp_flags AS
         WITH c AS (SELECT c.comp, r.* FROM comp1 c JOIN recs r USING (rid)),
-        dobs AS (SELECT DISTINCT comp, dob_eff FROM c WHERE dob_eff IS NOT NULL),
+        dobs AS (SELECT DISTINCT comp, dob_chk FROM c WHERE dob_chk IS NOT NULL),
         contra AS (
-          SELECT DISTINCT x.comp FROM dobs x JOIN dobs y ON x.comp = y.comp AND x.dob_eff < y.dob_eff
-          WHERE damerau_levenshtein(strftime(x.dob_eff, '%Y%m%d'), strftime(y.dob_eff, '%Y%m%d')) > 1
-            AND NOT (year(x.dob_eff) = year(y.dob_eff) AND month(x.dob_eff) = day(y.dob_eff)
-                     AND day(x.dob_eff) = month(y.dob_eff))),
+          SELECT DISTINCT x.comp FROM dobs x JOIN dobs y ON x.comp = y.comp AND x.dob_chk < y.dob_chk
+          WHERE NOT tscope_dob_slip(x.dob_chk, y.dob_chk)),
         diff AS (
           SELECT DISTINCT a.comp FROM pairs_final p JOIN comp1 a ON a.rid = p.rid_l JOIN comp1 b ON b.rid = p.rid_r
           WHERE p.decision = 'different' AND a.comp = b.comp)
@@ -411,6 +416,24 @@ class Matcher:
         self.score()
         self.classify()
         self.cluster()
+
+
+def swapped_sql(fl: str, ll: str, fr: str, lr: str, lo: float, hi: float) -> str:
+    """First name and surname recorded the other way round (each side similar, at least one closely)."""
+    a = f"jaro_winkler_similarity({fl}, {lr})"
+    b = f"jaro_winkler_similarity({ll}, {fr})"
+    return f"({a} >= {lo} AND {b} >= {lo} AND ({a} >= {hi} OR {b} >= {hi}))"
+
+
+def first_compatible_sql(l: str, r: str, lo: float, hi: float) -> str:  # noqa: E741
+    """First names that do not contradict: equal or variant, similar (Jaro-Winkler or one edit), swapped with the
+    surname, one is the other's middle name, or one is an initial of the other."""
+    return (f"{l}.first_c = {r}.first_c OR jaro_winkler_similarity({l}.first, {r}.first) >= {lo} "
+            f"OR damerau_levenshtein({l}.first, {r}.first) <= 1 "
+            f"OR {swapped_sql(l + '.first', l + '.last', r + '.first', r + '.last', lo, hi)} "
+            f"OR list_contains(string_split(coalesce({r}.middle, ''), ' '), {l}.first) "
+            f"OR list_contains(string_split(coalesce({l}.middle, ''), ' '), {r}.first) "
+            f"OR ((length({l}.first) = 1 OR length({r}.first) = 1) AND left({l}.first, 1) = left({r}.first, 1))")
 
 
 def _round_model(model: dict, digits: int) -> dict:

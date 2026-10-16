@@ -55,8 +55,8 @@ DEFAULTS: dict = {
     "schema": CONFIG_SCHEMA,
     "bands": {"auto_link": 0.995, "review": 0.80},
     "blocking": {
-        "rules": ["sa_id", "soundex_last_dob", "soundex_names_sorted_dob", "maiden_dob", "phone", "email",
-                  "soundex_names_birth_year"],
+        "rules": ["sa_id", "soundex_last_dob", "soundex_first_dob", "soundex_names_sorted_dob", "maiden_dob",
+                  "phone", "email", "soundex_names_birth_year", "soundex_names_birthday"],
         "max_block_size": 50,
     },
     "comparisons": {"jw_high": 0.92, "jw_low": 0.80, "term_frequency": ["first", "last", "phone"]},
@@ -67,8 +67,11 @@ DEFAULTS: dict = {
     "guards": {
         # pairs whose first names contradict (not equal, not similar, not swapped, not a middle name or variant)
         "first_name_contradiction": "non_link",
-        # both dates of birth recorded and not a one-character slip or day/month swap
+        # both dates of birth recorded, not a slip (one character, one day, day/month swap or one year) and the
+        # records do not share a valid SA ID: within a year of each other → at most review ...
         "dob_contradiction": "review",
+        # ... two or more years apart (a parent and child or two siblings sharing a name) → non-link
+        "dob_years_apart": "non_link",
         # two valid but different SA ID numbers (Luhn catches every single-digit typo, so these are two IDs)
         "different_valid_sa_id": "non_link",
         # a pair with a recorded guardian relationship (one record's guardian ID is the other's ID)
@@ -82,16 +85,17 @@ DEFAULTS: dict = {
         "surname_particles": ["VAN", "DER", "DEN", "DU", "DE", "LE", "LA", "JANSE", "VON", "TE", "TER"],
     },
     # first-name variant groups; the first entry is the canonical form used for comparison
+    # first-name variant groups (spellings and diminutives rarely given as separate names); the first entry is the
+    # canonical form. Tuned per hospital with ``tscope profile``.
     "name_variants": [
-        ["ELIZABETH", "ELISABETH", "LIZ", "LIZZY", "BETH", "BETTY"],
-        ["JOHANNES", "JOHAN", "HANNES", "JOHN", "JAN"],
-        ["JACOBUS", "KOOS", "JACO", "JAKOBUS"],
-        ["PETRUS", "PIET", "PIETER", "PETER"],
-        ["WILLEM", "WILLIAM", "WILL", "BILL", "WIKUS"],
-        ["CATHARINA", "CATHERINE", "KATHERINE", "CATHY", "KATE"],
-        ["MOHAMMED", "MOHAMED", "MUHAMMAD", "MOHAMMAD"],
-        ["SBUSISO", "SIBUSISO"],
-        ["THEMBA", "THEMBI"],
+        ["ELIZABETH", "ELISABETH", "LIZ", "LIZZY", "BETTY"],
+        ["MOHAMMED", "MOHAMED", "MUHAMMAD", "MOHAMMAD", "MOHAMAD"],
+        ["SIBUSISO", "SBUSISO"],
+        ["CATHARINA", "CATHERINE", "KATHERINE", "CATHRINE", "KATHRYN"],
+        ["JOHANNES", "HANNES"],
+        ["JACOBUS", "KOOS"],
+        ["NOMPUMELELO", "MPUMI"],
+        ["THANDEKA", "THANDI"],
     ],
     "minor_age_years": 18,
     "contact": {"address_requires_postal_code": True},
@@ -119,7 +123,7 @@ def validate(cfg: dict) -> dict:
         if v not in ("non_link", "review", "off"):
             raise ConfigError(f"guard {k} must be non_link, review or off")
     known = {"sa_id", "soundex_last_dob", "soundex_names_sorted_dob", "maiden_dob", "phone", "email",
-             "soundex_names_birth_year", "passport"}
+             "soundex_names_birth_year", "passport", "soundex_first_dob", "soundex_names_birthday"}
     bad = set(cfg["blocking"]["rules"]) - known
     if bad:
         raise ConfigError(f"unknown blocking rule(s): {sorted(bad)}")

@@ -48,6 +48,11 @@ CREATE OR REPLACE MACRO tscope_soundex(s) AS CASE WHEN s IS NULL OR replace(s, '
   left(rpad(left(replace(s, ' ', ''), 1) || replace(
     CASE WHEN left(replace(s, ' ', ''), 1) IN ('H', 'W') THEN tsx_code(replace(s, ' ', ''))
          ELSE substr(tsx_code(replace(s, ' ', '')), 2) END, '0', ''), 4, '0'), 4) END;
+CREATE OR REPLACE MACRO tscope_dob_slip(a, b) AS a = b
+  OR damerau_levenshtein(strftime(a, '%Y%m%d'), strftime(b, '%Y%m%d')) <= 1
+  OR abs(date_diff('day', a, b)) <= 1
+  OR (year(a) = year(b) AND month(a) = day(b) AND day(a) = month(b))
+  OR (month(a) = month(b) AND day(a) = day(b) AND abs(year(a) - year(b)) = 1);
 """
 
 
@@ -220,12 +225,15 @@ def _prepare_identity(con, cfg: dict, ref: dt.date) -> None:
       FROM a),
     c AS (
       SELECT *,
+        -- first token, joining leading surname particles ("VAN ZYL MARIA" -> "VANZYL", middle "MARIA")
         CASE WHEN fn1 IS NULL THEN NULL
-             WHEN list_contains({part_list}, string_split(fn1, ' ')[1]) THEN replace(fn1, ' ', '')
-             ELSE string_split(fn1, ' ')[1] END AS first_tok,
-        CASE WHEN fn1 IS NULL OR list_contains({part_list}, string_split(fn1, ' ')[1]) THEN mn0
-             ELSE nullif(trim(array_to_string(string_split(fn1, ' ')[2:], ' ') || ' ' || coalesce(mn0, '')), '') END
-          AS middle,
+             ELSE array_to_string(string_split(fn1, ' ')[1:coalesce(list_position(list_transform(
+                    string_split(fn1, ' '), t -> list_contains({part_list}, t)), false), len(string_split(fn1, ' ')))], '')
+             END AS first_tok,
+        CASE WHEN fn1 IS NULL THEN mn0
+             ELSE nullif(trim(array_to_string(string_split(fn1, ' ')[coalesce(list_position(list_transform(
+                    string_split(fn1, ' '), t -> list_contains({part_list}, t)), false), len(string_split(fn1, ' '))) + 1:],
+                    ' ') || ' ' || coalesce(mn0, '')), '') END AS middle,
         replace(ln1, ' ', '') AS last,
         replace(md1, ' ', '') AS maiden,
         tscope_sa_id_norm(sa_id) AS sa_id_n,
@@ -240,7 +248,8 @@ def _prepare_identity(con, cfg: dict, ref: dt.date) -> None:
         tscope_sa_id_norm(guardian_sa_id) AS g_sa_id_n,
         nullif(lower(trim(language)), '') AS lang
       FROM b)
-    SELECT c.* EXCLUDE (fn0, ln0, mn0, md0, fn1, ln1, md1), coalesce(v.canon, c.first_tok) AS first
+    SELECT c.* EXCLUDE (fn0, ln0, mn0, md0, fn1, ln1, md1), c.first_tok AS first,
+           coalesce(v.canon, c.first_tok) AS first_c
     FROM c LEFT JOIN name_variants v ON v.name = c.first_tok""")
     con.execute(f"""
     CREATE TABLE ident AS
@@ -253,8 +262,11 @@ def _prepare_identity(con, cfg: dict, ref: dt.date) -> None:
       FROM ident1)
     SELECT row_number() OVER (ORDER BY t_idx, ordinal, row_key) AS row_id, row_key, t_idx, ordinal,
       local_patient_key AS local_key, record_date,
-      first, middle, last, maiden, sa_id_n AS sa_id, passport, dob,
+      first, first_c, middle, last, maiden, sa_id_n AS sa_id, passport, dob,
       coalesce(dob, dob_from_id) AS dob_eff,
+      -- date used for contradiction checks: the ID's embedded date when the typed DOB disagrees with a valid ID
+      CASE WHEN sa_id_n IS NOT NULL AND dob IS NOT NULL AND strftime(dob, '%y%m%d') <> left(sa_id_n, 6)
+           THEN dob_from_id ELSE coalesce(dob, dob_from_id) END AS dob_chk,
       (dob IS NULL OR sa_id_n IS NULL OR strftime(dob, '%y%m%d') = left(sa_id_n, 6)) AS dob_consistent,
       coalesce(sex0, CASE WHEN sa_id_n IS NULL THEN NULL WHEN substr(sa_id_n, 7, 4)::INT < 5000 THEN 'F' ELSE 'M' END)
         AS sex,
