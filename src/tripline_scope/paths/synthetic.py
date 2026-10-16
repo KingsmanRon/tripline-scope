@@ -325,10 +325,10 @@ class Generator:
         T["expected_unresolved_upstream"] = []
 
         # baseline familiarity: DBA and z.patel accessed their tables before the incident window
-        for day, who, ip, db in (("2026-08-27", "dba.khumalo", "10.20.1.21", "LabDB01"),
-                                 ("2026-08-28", "z.patel", "10.20.1.22", "LabDB02")):
+        for day, who, ip, db, ws in (("2026-08-27", "dba.khumalo", "10.20.1.21", "LabDB01", "WS-DBA01"),
+                                     ("2026-08-28", "z.patel", "10.20.1.22", "LabDB02", "WS-ZPATEL")):
             inst = DB_SERVER[db]
-            self.sql[inst].session(_t(day, 8, 0), self.spid(inst), f"LAB\\{who}", ip, "WS-" + who.split(".")[0].upper(),
+            self.sql[inst].session(_t(day, 8, 0), self.spid(inst), f"LAB\\{who}", ip, ws,
                                    "Microsoft SQL Server Management Studio - Query",
                                    [(5, "SL", db, "results", "SELECT TOP 50 * FROM dbo.results", 50, None, "")])
 
@@ -468,7 +468,7 @@ class Generator:
             {"from": {"family": "vpn", "session_id": "VPN-7781"},
              "to": {"family": "mssql_audit", "account": a, "host": "labsql02"}, "why": "VPN-assigned address lease"},
             {"from": {"family": "vpn", "session_id": "VPN-7781"},
-             "to": {"family": "pg_log", "session_id": pg_sid}, "why": "VPN-assigned address lease"},
+             "to": {"family": "pgaudit", "session_id": pg_sid}, "why": "VPN-assigned address lease"},
             {"from": {"family": "vpn", "session_id": "VPN-7781"},
              "to": {"family": "win_security", "logon_id": lid}, "why": "VPN-assigned address lease"},
             {"from": {"family": "mssql_audit", "account": a, "host": "labsql01"},
@@ -651,12 +651,13 @@ class Generator:
         src = [
             {"id": "labsql01-audit", "family": "mssql_audit", "format": "csv", "path": "mssql/labsql01_audit.csv",
              "host": "LABSQL01", "host_ips": [SERVERS["LABSQL01"]], "asset_id": "AST-LABSQL01", "clock_uncertainty_s": 2,
-             "coverage": cov},
+             "coverage": dict(cov, databases=DBS[:5])},
             {"id": "labsql02-audit", "family": "mssql_audit", "format": "json", "path": "mssql/labsql02_audit.json",
              "host": "LABSQL02", "host_ips": [SERVERS["LABSQL02"]], "asset_id": "AST-LABSQL02", "clock_uncertainty_s": 2,
-             "coverage": cov},
+             "coverage": dict(cov, databases=DBS[5:])},
             {"id": "lispg01", "family": "pgaudit", "format": "stderr", "path": "pg/postgresql-2026-09.log", "host": "LISPG01",
-             "host_ips": ["10.20.0.25"], "asset_id": "AST-LISPG01", "clock_uncertainty_s": 1, "coverage": cov,
+             "host_ips": ["10.20.0.25"], "asset_id": "AST-LISPG01", "clock_uncertainty_s": 1,
+             "coverage": dict(cov, databases=["lis"]),
              "options": {"log_line_prefix": "%m [%p] %q%u@%d %r %c "}},
             {"id": "web01-iis", "family": "iis", "format": "w3c", "path": "web/iis", "host": "WEB01",
              "host_ips": ["10.20.0.40"], "asset_id": "AST-WEB01", "clock_uncertainty_s": 1, "coverage": cov},

@@ -28,6 +28,39 @@ def cmd_ingest(args):
     emit(args, summary, "\n".join(lines))
 
 
+def _window(args, case):
+    from .timenorm import parse_window
+
+    if args.window:
+        return parse_window(args.window)
+    iw = case.config.get("incident_window") or {}
+    if not (iw.get("start") and iw.get("end")):
+        from tripline_scope.core.errors import ConfigError
+
+        raise ConfigError("give --window START/END (the case has no incident window)")
+    return parse_window(f"{iw['start']}/{iw['end']}")
+
+
+def cmd_analyse(args):
+    from .analyse import run_analysis
+
+    home, case = home_of(args), case_of(args)
+    win = _window(args, case)
+    with command("paths analyse", home=home, case=case, role="operator",
+                 params={"window": f"{win[0].isoformat()}/{win[1].isoformat()}"}) as ctx:
+        res = run_analysis(ctx, win)
+    cls = {}
+    for t in res["tables"]:
+        k = t["consequence_class"] or "no_access_observed"
+        cls[k] = cls.get(k, 0) + 1
+    out = {"events": res["events_total"], "paths": len(res["paths"]), "edges": len(res["edges"]),
+           "direct_edges": sum(1 for e in res["edges"] if e["label"] == "direct"),
+           "correlated_edges": sum(1 for e in res["edges"] if e["label"] == "correlated"),
+           "anomalies": len(res["anomalies"]), "gaps": len(res["gaps"]), "indicator_matches": res["indicator_match_total"],
+           "sensitive_tables_by_class": dict(sorted(cls.items())), "analysis_sha256": res["_sha256"]}
+    emit(args, out)
+
+
 def register(sub) -> None:
     p = sub.add_parser("paths", help="Module B: access-path analysis from hospital-exported logs (offline)")
     ps = p.add_subparsers(dest="paths_cmd", required=True)
@@ -36,3 +69,8 @@ def register(sub) -> None:
     add_case_arg(q)
     q.add_argument("--manifest", required=True, help="logs.yaml (tripline.logs-manifest/v1)")
     q.set_defaults(func=cmd_ingest)
+
+    q = ps.add_parser("analyse", aliases=["analyze"], help="reconstruct access paths, gaps and anomalies for a window")
+    add_case_arg(q)
+    q.add_argument("--window", help="START/END in ISO-8601 with zone (default: the case incident window)")
+    q.set_defaults(func=cmd_analyse)

@@ -16,6 +16,7 @@ Example::
         clock_offset_s: 0             # host clock minus true time (documented clock check)
         clock_uncertainty_s: 2
         coverage: {start: "2026-08-25T00:00:00Z", end: "2026-09-15T00:00:00Z",
+                   databases: [LabDB01, LabDB02],   # what the audit specification covers (database sources)
                    missing: [{start: ..., end: ..., reason: "audit file rolled over"}]}
     corroborations:
       - id: COR-1
@@ -147,6 +148,11 @@ def _coverage(cov, where: str) -> dict:
         raise _err(where, "coverage must be a mapping")
     out = {"start": _ts(cov["start"], where + ".start") if cov.get("start") else None,
            "end": _ts(cov["end"], where + ".end") if cov.get("end") else None, "missing": []}
+    dbs = cov.get("databases")
+    if dbs is not None:
+        if not isinstance(dbs, list) or not all(isinstance(x, str) and x for x in dbs):
+            raise _err(where, "coverage.databases must be a list of database names (patterns allowed)")
+        out["databases"] = [str(x)[:128] for x in dbs]
     for i, m in enumerate(cov.get("missing") or []):
         if not isinstance(m, dict) or not m.get("start") or not m.get("end"):
             raise _err(f"{where}.missing[{i}]", "needs start and end")

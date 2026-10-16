@@ -29,7 +29,8 @@ DEFAULTS: dict = {
         "web_to_vpn_s": 3600,            # web request and VPN session from the same public address
         "web_to_db_s": 5,                # web request -> database session from the web server, no request id
         "host_logon_to_db_s": 900,       # Windows logon from an address -> database session from that address
-        "data_to_egress_s": 3600,        # export/staging or read -> outbound flow from the same host
+        "data_to_egress_s": 21600,       # export/staging -> outbound flow from the same host or client
+        "staging_link_s": 600,           # export command -> file with a staging extension written on that host
         "shared_ip_min_accounts": 2,     # distinct accounts behind one address that make it "shared"
         "unknown_clock_uncertainty_s": 120,   # assumed when a source documents no clock uncertainty
         "session_gap_s": 1800,           # database session id reused after this much silence
