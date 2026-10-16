@@ -290,13 +290,13 @@ class Walker:
             if info.flag_bits & 0x1:
                 self.rec.unavail(FILE_CONTROLS, unit, "encrypted archive member: not inspected", loc)
                 continue
-            if info.file_size > max_file:
-                self.rec.unavail(FILE_CONTROLS, unit, "archive member exceeds the per-file size budget", loc)
-                continue
             if info.file_size / max(info.compress_size, 1) > max_ratio:
                 self.rec.unavail(FILE_CONTROLS, unit, "compression ratio exceeds the budget (possible archive "
                                  "bomb): not decompressed", loc)
                 self.rec.count("A3", "archive_bombs_refused")
+                continue
+            if info.file_size > max_file:
+                self.rec.unavail(FILE_CONTROLS, unit, "archive member exceeds the per-file size budget", loc)
                 continue
             if total + info.file_size > max_total:
                 self.rec.unavail(FILE_CONTROLS, unit, "archive decompressed-size budget exhausted; remaining "
