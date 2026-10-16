@@ -38,9 +38,9 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _wheel_index(wheels: Path) -> dict[tuple[str, str], Path]:
+def _wheel_index(wheels: Path | list[Path]) -> dict[tuple[str, str], Path]:
     out = {}
-    for w in wheels.glob("*.whl"):
+    for w in (w for d in (wheels if isinstance(wheels, list) else [wheels]) for w in d.glob("*.whl")):
         name, version = w.name.split("-")[:2]
         out[(normalize_name(name), version)] = w
     return out
@@ -51,7 +51,7 @@ def _cyclonedx_cmd() -> list[str]:
     return [exe] if Path(exe).exists() else [sys.executable, "-m", "cyclonedx_py"]
 
 
-def generate(python: Path, wheels: Path, lock_path: Path, pyproject: Path, out: Path,
+def generate(python: Path, wheels: Path | list[Path], lock_path: Path, pyproject: Path, out: Path,
              native_audit: Path | None) -> dict:
     lock = parse_lock(lock_path)
     with tempfile.TemporaryDirectory() as td:
@@ -77,7 +77,7 @@ def generate(python: Path, wheels: Path, lock_path: Path, pyproject: Path, out: 
             problems.append(f"{wheel.name}: SHA-256 is not one of the lock's hashes")
         comp["hashes"] = [{"alg": "SHA-256", "content": digest}]
         props = comp.setdefault("properties", [])
-        props.append({"name": "tripline:bundle-file", "value": f"wheels/{wheel.name}"})
+        props.append({"name": "tripline:bundle-file", "value": f"wheels/{wheel.name}"})  # path in the bundle
         props.append({"name": "tripline:origin", "value": "first-party, built from this repository"
                       if key in FIRST_PARTY else "PyPI, pinned by hash in requirements.txt"})
         nested = _native_components(comp, audit_by_key.get(key))
@@ -163,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     g = sub.add_parser("generate")
     g.add_argument("--python", type=Path, required=True, help="python of a clean venv installed from the lock")
-    g.add_argument("--wheels", type=Path, required=True)
+    g.add_argument("--wheels", type=Path, action="append", required=True, help="wheel directory (repeatable)")
     g.add_argument("--lock", type=Path, required=True)
     g.add_argument("--pyproject", type=Path, default=Path(__file__).resolve().parent.parent / "pyproject.toml")
     g.add_argument("--native-audit", type=Path)
