@@ -506,7 +506,7 @@ def analyse_identity(state: ScanState, ident: Identity) -> None:
         if enabled is False:
             rec.count("A5", "disabled_supplier_accounts_skipped")
             continue
-        loc = _loc(name, sup.supplier if sup else None)
+        loc = _loc(acct.upn if acct is not None and acct.upn else name, sup.supplier if sup else None)
         src = state.source_for.get("identity:supplier_register") or state.source_for.get("identity:directory_export")
         ev_unit = "identity:supplier_register" if sup else "identity:directory_export"
 
