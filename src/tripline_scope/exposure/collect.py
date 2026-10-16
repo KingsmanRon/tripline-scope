@@ -127,7 +127,7 @@ def collect_postgres(*, host, port, user, password, database, timeout_s=30, max_
 def collect_mssql(*, host, port, user, password, database, timeout_s=30, max_rows=200_000) -> dict:
     import pytds
 
-    conn = pytds.connect(server=host, port=int(port), user=user, password=password, database=database,
+    conn = pytds.connect(dsn=host, port=int(port), user=user, password=password, database=database,
                          login_timeout=timeout_s, timeout=timeout_s, autocommit=True, appname="tripline-exposure-metadata")
     try:
         cur = conn.cursor()
