@@ -142,6 +142,11 @@ def pg_cluster():
     if not Path(PG_BIN, "initdb").exists():
         pytest.skip("PostgreSQL 16 binaries not installed")
     run_as = "postgres" if os.geteuid() == 0 else None
+    for stale in Path(tempfile.gettempdir()).glob("tscope-ingest-pg-*"):   # left by an interrupted run
+        if (stale / "data" / "postmaster.pid").exists():
+            _pg_run([f"{PG_BIN}/pg_ctl", "-D", str(stale / "data"), "-m", "immediate", "stop"], user=run_as,
+                    check=False)
+        shutil.rmtree(stale, ignore_errors=True)
     base = Path(tempfile.mkdtemp(prefix="tscope-ingest-pg-"))
     data = base / "data"
     pwfile = base / "pw"
