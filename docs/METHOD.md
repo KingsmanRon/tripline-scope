@@ -144,8 +144,13 @@ The leak sample is evidence, not a contact source: contact details come only fro
 
 `tscope estimate` gives a first count within minutes, labelled **preliminary**: the number of distinct valid ID
 numbers, plus distinct phonetic name and date-of-birth keys among rows without an ID that are not already carried
-by an ID row. The lower bound merges more aggressively (surname sound and date of birth only); the upper bound
-splits more (exact spelling). The refined, person-level count replaces it in a later, signed version.
+by an ID row. The **lower bound** joins records into groups whenever they share *any* of: an ID number, the sound
+of the surname with the date of birth, or the sounds of both names with the year of birth — and counts the groups.
+This deliberately merges too much (it can join two different people who share those keys, and it joins one person
+who has two different ID numbers after a keying error), so the true number of people should not be below it.
+The **upper bound** splits more (exact spelling, no merging of records without an ID). On synthetic data the true
+number of people fell inside the bounds in every run, and the point estimate was about 2 % above it (see
+`bench/results/estimate_*.json`). The refined, person-level count replaces it in a later, signed version.
 
 ## 6. Module B scope candidates
 
