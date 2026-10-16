@@ -65,7 +65,8 @@ def generate(python: Path, wheels: Path, lock_path: Path, pyproject: Path, out: 
     audit = json.loads(native_audit.read_text()) if native_audit else {"packages": {}}
     audit_by_key = {normalize_name(k): v for k, v in (audit.get("packages") or {}).items()}
     problems = []
-    for comp in bom.get("components", []):
+    root = (bom.get("metadata") or {}).get("component")
+    for comp in bom.get("components", []) + ([root] if root else []):
         key = normalize_name(comp["name"])
         wheel = index.get((key, comp.get("version")))
         if wheel is None:
@@ -122,6 +123,9 @@ def check(sbom_path: Path, lock_path: Path) -> list[str]:
     lock = parse_lock(lock_path)
     errors = []
     comps = {normalize_name(c["name"]): c for c in bom.get("components", [])}
+    root = (bom.get("metadata") or {}).get("component")
+    if root:
+        comps.setdefault(normalize_name(root["name"]), root)
     if bom.get("bomFormat") != "CycloneDX":
         errors.append("not a CycloneDX document")
     for key, e in sorted(lock.items()):
