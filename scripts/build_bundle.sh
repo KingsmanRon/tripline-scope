@@ -135,7 +135,7 @@ git_dirty=$([[ -z $(git -C "$root" status --porcelain --untracked-files=no) ]] &
 "$PYTHON" - "$out/BUILDINFO.json" <<EOF
 import json, sys
 json.dump({
-    "product": "tripline-scope", "version": "$version", "git_commit": "$git_commit", "git_dirty": $git_dirty,
+    "product": "tripline-scope", "version": "$version", "git_commit": "$git_commit", "git_dirty": json.loads("$git_dirty"),
     "source_date_epoch": int("$SOURCE_DATE_EPOCH"),
     "target": "CPython 3.12, x86_64 Linux, glibc >= 2.28 (venv mode) or Docker (container mode)",
     "images": $images_json, "with_mssql_demo": "$WITH_MSSQL_DEMO" == "1",

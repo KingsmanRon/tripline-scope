@@ -258,17 +258,19 @@ def detect_text(text: str) -> str | None:
 _GRANT = re.compile(
     r"under the terms of the gnu (?:lesser |library |affero )?general public licen[cs]e"
     r"|licensed under the (?:gnu )?(?:a|l)?gpl\b|server side public license", re.I)
+# A file that *is* a copyleft licence text starts with its heading, e.g. "GNU GENERAL PUBLIC LICENSE Version 2".
+_HEADING = re.compile(r"^(?:gnu (lesser |library |affero )?general public licen[cs]e,? version \d"
+                      r"|server side public license,? version \d)")
 _LICENCE_FILE = re.compile(r"(licen[cs]e|copying|notice|copyright)", re.I)
 
 
 def copyleft_grant(text: str) -> str | None:
     """Return the copyleft family when ``text`` is (or grants) a GPL/LGPL/AGPL/SSPL licence."""
-    head = _norm(text)[:300]
-    for marker, fam in (("gnu affero general public license", "AGPL"), ("gnu lesser general public license", "LGPL"),
-                        ("gnu library general public license", "LGPL"), ("gnu general public license", "GPL"),
-                        ("server side public license", "SSPL")):
-        if marker in head:
-            return fam
+    m = _HEADING.match(_norm(text))
+    if m:
+        kind = (m.group(1) or "").strip()
+        return {"affero": "AGPL", "lesser": "LGPL", "library": "LGPL"}.get(kind, "SSPL" if "server" in m.group(0)
+                                                                          else "GPL")
     m = _GRANT.search(re.sub(r"\s+", " ", text))
     if not m:
         return None
