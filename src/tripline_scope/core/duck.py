@@ -35,7 +35,6 @@ def connect(
             "autoinstall_known_extensions": False,
             "autoload_known_extensions": False,
             "allow_community_extensions": False,
-            "enable_progress_bar": False,
             "temp_directory": spill_dir if (spill_dir and spill_dir_encrypted) else "",
         },
     )
@@ -43,6 +42,7 @@ def connect(
         con.execute("SET memory_limit = ?", [memory_limit])
     if threads:
         con.execute(f"SET threads = {int(threads)}")
+    con.execute("SET enable_progress_bar = false")
     con.execute("SET preserve_insertion_order = true")
     for stmt in DUCKDB_MACROS.strip().split(";\n"):
         if stmt.strip():
