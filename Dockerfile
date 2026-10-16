@@ -33,13 +33,13 @@ COPY wheels/ /tmp/bundle/wheels/
 COPY requirements.txt prune.list prune.sh /tmp/bundle/
 COPY smoke-test.sh /opt/tripline/share/smoke-test.sh
 
-# Install into a venv without pip (the system pip only installs, then is removed), prune unused font data,
-# and drop pip from the image: the running container cannot install anything.
-RUN python -m venv --without-pip /opt/tripline/venv \
- && python -m pip --python /opt/tripline/venv/bin/python install --no-index --no-cache-dir --require-hashes \
+# Install into a venv without pip using the base image's interpreter (PATH already prefers the venv), prune
+# unused font data, and drop pip from the image: the running container cannot install anything.
+RUN /usr/local/bin/python -m venv --without-pip /opt/tripline/venv \
+ && /usr/local/bin/python -m pip --python /opt/tripline/venv/bin/python install --no-index --no-cache-dir --require-hashes \
         --find-links /tmp/bundle/wheels -r /tmp/bundle/requirements.txt \
  && sh /tmp/bundle/prune.sh /opt/tripline/venv/bin/python /tmp/bundle/prune.list \
- && python -m pip uninstall --yes --quiet pip \
+ && /usr/local/bin/python -m pip uninstall --yes --quiet --root-user-action=ignore pip \
  && rm -rf /tmp/bundle /root/.cache \
  && useradd --system --uid 10001 --user-group --home-dir /var/lib/tripline --shell /usr/sbin/nologin tscope \
  && mkdir -p /var/lib/tripline /cases /sources /kek \
