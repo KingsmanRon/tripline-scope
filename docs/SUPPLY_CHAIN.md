@@ -203,7 +203,7 @@ SQL Server image: 493 MB in total.
 | `requirements.txt` | the hashed runtime lock plus the two first-party wheels pinned by SHA-256 | 84 KB |
 | `images/tripline-scope-<v>.tar` | `docker save` of the app image, built with `docker build --network none` (819 MB unpacked) | 251 MB |
 | `images/postgres-16.tar` | `docker save mirror.gcr.io/library/postgres:16` | 166 MB |
-| `images/mssql-server-developer-demo-only.tar` | only with `WITH_MSSQL_DEMO=1`, plus `MSSQL-DEVELOPER-EDITION.txt` (synthetic demos/tests only). Not measured here; Docker reports the image's content size as 627 MB. | n/a |
+| `images/mssql-server-developer-demo-only.tar` | only with `WITH_MSSQL_DEMO=1`, plus `MSSQL-DEVELOPER-EDITION.txt` (synthetic demos/tests only) | 627 MB (`docker save` measured; bundle then about 1.12 GB) |
 | `images/IMAGES.txt` | reference, image id, repo digest and platform of each image, plus the app image's base image | |
 | `sbom.cdx.json`, `licences.json` | sections 2 and 4 | |
 | `install.sh`, `smoke-test.sh`, `prune.list`, `prune.sh` | offline installer, installation qualification, font pruning | |
