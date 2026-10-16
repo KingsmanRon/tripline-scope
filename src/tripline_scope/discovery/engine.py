@@ -112,12 +112,16 @@ def _empty_profile() -> Profile:
 def _read_sample(reader, table, sample_rows: int, batch_rows: int) -> tuple[list[list[str | None]], int]:
     cols: list[list[str | None]] = [[] for _ in table.columns]
     n = 0
-    for batch in reader.iter_batches(table, min(batch_rows, sample_rows), limit=sample_rows):
-        for i in range(len(table.columns)):
-            cols[i].extend(batch.column(i).to_pylist())
-        n += batch.num_rows
-        if n >= sample_rows:
-            break
+    gen = reader.iter_batches(table, min(batch_rows, sample_rows), limit=sample_rows)
+    try:
+        for batch in gen:
+            for i in range(len(table.columns)):
+                cols[i].extend(batch.column(i).to_pylist())
+            n += batch.num_rows
+            if n >= sample_rows:
+                break
+    finally:
+        gen.close()
     return cols, n
 
 

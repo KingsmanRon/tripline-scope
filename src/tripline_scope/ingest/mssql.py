@@ -141,6 +141,7 @@ def ensure_restored(case, store, home, source: dict, limits: IngestLimits, warn=
         raise ConfigError("SQL Server restores read the .bak from its path: register the source by reference "
                           "(not --copy) on storage the restore server can read")
     src_path = str(custody.reference_path(case, sid))
+    restores.cleanup_interrupted(home, store, sid)
     entry = restores.active(store, sid)
     con = connect(target, timeout=limits.query_timeout_s)
     try:
@@ -157,70 +158,78 @@ def ensure_restored(case, store, home, source: dict, limits: IngestLimits, warn=
                                  "not recorded for this case; refusing to replace it")
     finally:
         con.close()
-    server_file, copy = _transfer(target, src_path, db)
-    copy_removed = copy is None
-    try:
-        con = connect(target, timeout=limits.restore_timeout_s)
-        try:
-            cur = con.cursor()
-            lit = literal(server_file)
-            cur.execute(f"RESTORE HEADERONLY FROM DISK = {lit}")
-            headers = _rows(cur)
-            _drain(cur)
-            if not headers:
-                raise IntegrityError("backup file holds no backup sets")
-            full = [h for h in headers if int(h.get("BackupType") or 0) == 1] or headers
-            position = int(full[-1].get("Position") or 1)
-            original = str(full[-1].get("DatabaseName") or "")
-            cur.execute(f"RESTORE FILELISTONLY FROM DISK = {lit} WITH FILE = {position}")
-            filelist = _rows(cur)
-            _drain(cur)
-            cur.execute("SELECT CAST(SERVERPROPERTY('InstanceDefaultDataPath') AS nvarchar(400)), "
-                        "CAST(SERVERPROPERTY('InstanceDefaultLogPath') AS nvarchar(400))")
-            ddata, dlog = cur.fetchone()
-            data_dir = _safe_server_path((target.data_dir or ddata or "").rstrip("/\\"))
-            log_dir = _safe_server_path((target.log_dir or target.data_dir or dlog or ddata or "").rstrip("/\\"))
-            sep = "\\" if re.match(r"^[A-Za-z]:\\", data_dir) else "/"
-            moves, seen_data = [], False
-            for f in filelist:
-                fid = int(f.get("FileID") or len(moves) + 1)
-                ftype = str(f.get("Type") or "D")
-                if ftype == "L":
-                    phys = f"{log_dir}{sep}{db}_{fid}.ldf"
-                elif ftype == "D":
-                    phys = f"{data_dir}{sep}{db}_{fid}.{'ndf' if seen_data else 'mdf'}"
-                    seen_data = True
-                else:
-                    phys = f"{data_dir}{sep}{db}_{fid}"
-                moves.append(f"MOVE {literal(str(f['LogicalName']))} TO {literal(_safe_server_path(phys))}")
-            cur.execute(f"RESTORE DATABASE {quote(db)} FROM DISK = {lit} WITH FILE = {position}, "
-                        f"{', '.join(moves)}, RECOVERY, NOUNLOAD")
-            _drain(cur)
-            if not database_exists(cur, db):
-                raise IntegrityError("restore did not produce the database")
-            cur.execute(f"ALTER DATABASE {quote(db)} SET READ_ONLY WITH ROLLBACK IMMEDIATE")
-            _drain(cur)
-        finally:
-            con.close()
-    finally:
-        if copy:
-            copy_removed = remove_transfer_copy(target, copy)
     entry = {
         "source_id": sid,
         "engine": "mssql",
         "instance_ref": target.instance_ref,
         "database": db,
-        "original_database": original,
-        "restored_at": now_iso(),
+        "original_database": None,
+        "restored_at": None,
         "source_sha256": files[0].get("sha256"),
         "transfer": target.backup_transfer,
-        "transfer_copy": copy,
-        "transfer_copy_removed": copy_removed,
-        "read_only": True,
-        "status": "restored",
+        "transfer_copy": server_path(target, f"{db}.bak") if target.backup_transfer == "docker_cp" else None,
+        "transfer_copy_removed": target.backup_transfer != "docker_cp",
+        "read_only": False,
     }
-    restores.record(store, entry)
-    return entry
+    restores.begin(store, entry)      # recorded before any data reaches the server, so closure can drop it
+    copy = None
+    try:
+        server_file, copy = _transfer(target, src_path, db)
+        original = _restore(target, db, server_file, limits)
+    except BaseException:
+        if copy:
+            remove_transfer_copy(target, copy)
+        restores.abandon(home, store, entry)
+        raise
+    copy_removed = remove_transfer_copy(target, copy) if copy else True
+    return restores.update(store, sid, db, status="restored", restored_at=now_iso(), original_database=original,
+                           read_only=True, transfer_copy_removed=copy_removed)
+
+
+def _restore(target: Target, db: str, server_file: str, limits: IngestLimits) -> str:
+    con = connect(target, timeout=limits.restore_timeout_s)
+    try:
+        cur = con.cursor()
+        lit = literal(server_file)
+        cur.execute(f"RESTORE HEADERONLY FROM DISK = {lit}")
+        headers = _rows(cur)
+        _drain(cur)
+        if not headers:
+            raise IntegrityError("backup file holds no backup sets")
+        full = [h for h in headers if int(h.get("BackupType") or 0) == 1] or headers
+        position = int(full[-1].get("Position") or 1)
+        original = str(full[-1].get("DatabaseName") or "")
+        cur.execute(f"RESTORE FILELISTONLY FROM DISK = {lit} WITH FILE = {position}")
+        filelist = _rows(cur)
+        _drain(cur)
+        cur.execute("SELECT CAST(SERVERPROPERTY('InstanceDefaultDataPath') AS nvarchar(400)), "
+                    "CAST(SERVERPROPERTY('InstanceDefaultLogPath') AS nvarchar(400))")
+        ddata, dlog = cur.fetchone()
+        data_dir = _safe_server_path((target.data_dir or ddata or "").rstrip("/\\"))
+        log_dir = _safe_server_path((target.log_dir or target.data_dir or dlog or ddata or "").rstrip("/\\"))
+        sep = "\\" if re.match(r"^[A-Za-z]:\\", data_dir) else "/"
+        moves, seen_data = [], False
+        for f in filelist:
+            fid = int(f.get("FileID") or len(moves) + 1)
+            ftype = str(f.get("Type") or "D")
+            if ftype == "L":
+                phys = f"{log_dir}{sep}{db}_{fid}.ldf"
+            elif ftype == "D":
+                phys = f"{data_dir}{sep}{db}_{fid}.{'ndf' if seen_data else 'mdf'}"
+                seen_data = True
+            else:
+                phys = f"{data_dir}{sep}{db}_{fid}"
+            moves.append(f"MOVE {literal(str(f['LogicalName']))} TO {literal(_safe_server_path(phys))}")
+        cur.execute(f"RESTORE DATABASE {quote(db)} FROM DISK = {lit} WITH FILE = {position}, "
+                    f"{', '.join(moves)}, RECOVERY, NOUNLOAD")
+        _drain(cur)
+        if not database_exists(cur, db):
+            raise IntegrityError("restore did not produce the database")
+        cur.execute(f"ALTER DATABASE {quote(db)} SET READ_ONLY WITH ROLLBACK IMMEDIATE")
+        _drain(cur)
+        return original
+    finally:
+        con.close()
 
 
 def drop_database(target: Target, name: str) -> bool:

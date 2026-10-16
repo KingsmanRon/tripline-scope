@@ -54,6 +54,28 @@ def update(store, source_id: str, database: str, **changes) -> dict:
     raise IntegrityError("restore not found in the registry")
 
 
+def begin(store, entry: dict) -> None:
+    """Record a restore before any data reaches the target (status ``restoring``)."""
+    record(store, dict(entry, status="restoring"))
+
+
+def abandon(home, store, entry: dict) -> None:
+    """A restore failed: drop whatever reached the target and record the outcome (never raises)."""
+    try:
+        drop_entry(home, store, dict(entry, status="restoring"))
+    except Exception:  # noqa: BLE001, S110 - closure retries any entry not verified absent
+        pass
+
+
+def cleanup_interrupted(home, store, source_id: str) -> None:
+    """Drop restores of this source that were interrupted (``restoring``) or whose drop failed."""
+    for e in load(store)["restores"]:
+        if e["source_id"] == source_id and e["status"] in ("restoring", "drop_failed"):
+            e = drop_entry(home, store, e)
+            if not e.get("verified_absent"):
+                raise IntegrityError("an interrupted restore of this source could not be dropped; check the target")
+
+
 def drop_entry(home, store, entry: dict) -> dict:
     """Drop one restored database (and any leftover transferred backup copy) and verify it is gone."""
     from .config import target_for
