@@ -27,7 +27,7 @@ from tripline_scope import METHOD_VERSION, testing  # noqa: E402
 from tripline_scope.core.case import Case  # noqa: E402
 from tripline_scope.core.context import command  # noqa: E402
 from tripline_scope.core.home import Home  # noqa: E402
-from tripline_scope.scope import config, data, estimate  # noqa: E402
+from tripline_scope.scope import config, estimate  # noqa: E402
 from tripline_scope.scope.fixtures import load_synth_as_extract, register_synth_sources, synth_reference_date  # noqa: E402
 from tripline_scope.synth.generate import generate  # noqa: E402
 
@@ -40,6 +40,7 @@ def main(argv=None) -> int:
     ap.add_argument("--threads", type=int)
     ap.add_argument("--memory-limit", help="DuckDB memory limit, e.g. 13GB (default: DuckDB's 80%% of RAM)")
     ap.add_argument("--seed", type=int, default=20260914)
+    ap.add_argument("--rows-per-pass", type=int, help="identity rows per estimate slice (default: case config)")
     args = ap.parse_args(argv)
     work = Path(args.workdir) if args.workdir else Path(tempfile.mkdtemp(prefix="estimate-bench-"))
     T: dict[str, float] = {}
@@ -70,13 +71,14 @@ def main(argv=None) -> int:
         store = ctx.store
     mark("extract", t0)
     cfg = config.load(case)
+    if args.rows_per_pass:
+        cfg["estimate"]["rows_per_pass"] = args.rows_per_pass
     t0 = time.time()
-    d = data.load(case, store, cfg, threads=args.threads, memory_limit=args.memory_limit,
-                  reference_date=synth_reference_date(syn))
-    mark("load", t0)
-    t0 = time.time()
-    est = estimate.estimate(d)
-    mark("estimate", t0)
+    r = estimate.estimate_sliced(case, store, cfg, threads=args.threads, memory_limit=args.memory_limit,
+                                 reference_date=synth_reference_date(syn))
+    mark("estimate_path", t0)
+    T["load"], T["estimate"] = r["timings_s"]["load"], r["timings_s"]["estimate"]
+    est = r["estimate"]
     gt = pq.read_table(syn / "ground_truth.parquet", columns=["person_id"])
     true_people = len(set(gt.column("person_id").to_pylist()))
     result = {
@@ -89,10 +91,13 @@ def main(argv=None) -> int:
         "estimate_error_vs_truth": abs(est["point"] - true_people) / true_people,
         "truth_within_bounds": est["lower"] <= true_people <= est["upper"],
         "timings_s": T,
-        "estimate_path_s": round(T["load"] + T["estimate"], 2),
+        "estimate_path_s": T["estimate_path"],
+        "slices": r["slices"], "rows_per_pass": r["rows_per_pass"],
+        "unresolvable": r["unresolvable"],
         "peak_rss_mb": rss,
         "hardware": hardware(),
-        "note": "load + estimate is the preliminary-estimate path after ingest; synth and extract stand in for ingest.",
+        "note": "estimate_path (sliced load + estimate) is the preliminary-estimate path after ingest; synth and "
+            "extract stand in for ingest.",
     }
     out = HERE / "results" / f"estimate_{args.rows}.json"
     out.write_text(json.dumps(result, indent=2, sort_keys=True, default=str) + "\n")

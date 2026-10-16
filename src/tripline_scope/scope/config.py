@@ -101,7 +101,8 @@ DEFAULTS: dict = {
     ],
     "minor_age_years": 18,
     "contact": {"address_requires_postal_code": True},
-    "estimate": {"bounds": "calibrated_lower_exact_upper"},
+    # rows_per_pass: identity rows per slice of the preliminary estimate (memory bound; see scope/estimate.py)
+    "estimate": {"bounds": "calibrated_lower_exact_upper", "rows_per_pass": 3_000_000},
 }
 
 

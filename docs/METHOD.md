@@ -158,6 +158,16 @@ tested purely structural lower bounds and rejected them: counting distinct ID nu
 carry two valid ID numbers after a keying error), and merging records transitively on name and date keys chains
 unrelated people together in large estates (21–38 % too low at 10 million rows). The refined, person-level count replaces it in a later, signed version.
 
+**Bounded memory.** The estimate does not load the estate at once. It works one *slice* at a time: each source
+on its own, split by a hash of the patient key so that no slice holds more than `estimate.rows_per_pass` identity
+rows (default 3 million). Dependent rows (admissions, results, billing) join their patient only within the same
+source and by the same key, so every join falls inside one slice. Each usable identity row is reduced to five
+64-bit values (hashes of the SA ID and of the three keys above, plus the exposure-category mask), and the counts
+run over that table, about 40 bytes per row. The result is identical to loading everything at once (tested at
+every slicing, and on a 2-million-row estate). Two different keys share a 64-bit hash with probability about
+n²/2⁶⁵ (about 10⁻⁵ at 20 million keys). Nothing is spilled to disk. The person-level match still loads the
+estate as a whole.
+
 ## 6. Module B scope candidates
 
 When access-path analysis supplies scope candidates, each extracted table is classed confirmed, possible, not
