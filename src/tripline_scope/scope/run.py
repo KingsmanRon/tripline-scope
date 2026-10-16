@@ -35,12 +35,13 @@ PERSON_TABLES = "work/scope/person_tables.parquet"
 PERSON_ROWS = "work/scope/person_rows.parquet"
 
 
-def extract_hashes(store, data: D.ScopeData) -> dict[str, str]:
+def extract_hashes(store, data) -> dict[str, str]:
     """SHA-256 of each source's canonical extract manifest (plaintext, so identical inputs give identical hashes
     across cases; the encrypted file's own hash differs per case key and nonce)."""
     from tripline_scope.core.canonical import canonical_bytes, sha256_hex
 
-    return {sid: sha256_hex(canonical_bytes(data.sources[sid]["manifest"])) for sid in sorted(data.sources)}
+    sources = data["sources"] if isinstance(data, dict) else data.sources
+    return {sid: sha256_hex(canonical_bytes(sources[sid]["manifest"])) for sid in sorted(sources)}
 
 
 def _tables_json(con) -> list[dict]:
@@ -53,32 +54,25 @@ def _tables_json(con) -> list[dict]:
     return [dict(zip(keys, r, strict=True)) for r in rows]
 
 
-def run_estimate(case, store, cfg: dict, *, threads=None, reference_date: dt.date | None = None) -> dict:
-    t0 = time.time()
-    data = D.load(case, store, cfg, threads=threads, reference_date=reference_date)
-    t1 = time.time()
-    est = E.estimate(data)
-    con = data.con
-    unres_id = con.execute("SELECT count(*) FROM ident WHERE NOT usable").fetchone()[0]
-    unres_dep = con.execute("""SELECT coalesce(sum(d.n_rows), 0) FROM dep d WHERE NOT EXISTS (
-        SELECT 1 FROM dep_link l WHERE l.t_idx = d.t_idx AND l.patient_ref IS NOT DISTINCT FROM d.patient_ref)""").fetchone()[0]
-    tables = []
-    for t in data.tables:
-        tables.append({k: t[k] for k in ("t_idx", "source_id", "slug", "database", "table", "role", "evidence_role")}
-                      | {"rows": t["row_count"]})
+def run_estimate(case, store, cfg: dict, *, threads=None, memory_limit: str | None = None,
+                 reference_date: dt.date | None = None) -> dict:
+    """Preliminary estimate, computed one slice of the extracts at a time (bounded memory, no spill)."""
+    r = E.estimate_sliced(case, store, cfg, threads=threads, memory_limit=memory_limit, reference_date=reference_date)
+    tables = [{k: t[k] for k in ("t_idx", "source_id", "slug", "database", "table", "role", "evidence_role")}
+              | {"rows": t["row_count"]} for t in r["tables"]]
     out = {
         "schema": "tripline.scope-estimate/v1",
         "method_version": METHOD_VERSION,
         "config_sha256": C.config_sha256(cfg),
-        "extract_manifests_sha256": extract_hashes(store, data),
-        "reference_date": data.reference_date.isoformat(),
-        "estimate": est,
-        "unresolvable": {"identity_rows_without_identifiers": int(unres_id), "dependent_rows_unlinked": int(unres_dep)},
+        "extract_manifests_sha256": extract_hashes(store, r),
+        "reference_date": r["reference_date"].isoformat(),
+        "estimate": r["estimate"],
+        "unresolvable": r["unresolvable"],
         "tables": tables,
-        "timings_s": {"load": round(t1 - t0, 3), "estimate": round(time.time() - t1, 3)},
+        "slices": r["slices"],
+        "timings_s": r["timings_s"],
     }
     store.write_json(ESTIMATE, out)
-    con.close()
     return out
 
 

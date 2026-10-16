@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 
 import pyarrow as pa
@@ -118,13 +119,10 @@ def _mask_sql(cols: set[str], flag_cols: set[str]) -> str:
     return "(" + " | ".join(terms) + ")::INTEGER"
 
 
-def load(case, store, cfg: dict, *, threads: int | None = None, memory_limit: str | None = None,
-         reference_date: dt.date | None = None, include_dependent: bool = True) -> ScopeData:
+def _plan(case, store) -> tuple[dict, dict, list[dict]]:
     mans = manifests(case, store)
     if not mans:
         raise NotReady("no extracted sources (run ingest first)")
-    con = connect(threads=threads, memory_limit=memory_limit)
-    ref = reference_date or _incident_end(case)
     src_roles = {s["source_id"]: s.get("evidence_role") for s in case.sources()}
     tables = []
     for sid in sorted(mans):
@@ -133,11 +131,23 @@ def load(case, store, cfg: dict, *, threads: int | None = None, memory_limit: st
                            "table": e.get("table"), "role": e.get("role", "other"),
                            "evidence_role": src_roles.get(sid), "row_count": int(e.get("row_count") or 0),
                            "links_to": list(e.get("links_to") or []), "parts": _part_paths(sid, e)})
+    return mans, src_roles, tables
+
+
+def _src_tables(con, tables) -> None:
     con.execute("""CREATE TABLE src_tables(t_idx INTEGER, source_id VARCHAR, slug VARCHAR, database VARCHAR,
                    "table" VARCHAR, role VARCHAR, evidence_role VARCHAR, row_count BIGINT)""")
     con.executemany("INSERT INTO src_tables VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     [[t["t_idx"], t["source_id"], t["slug"], t["database"], t["table"], t["role"], t["evidence_role"],
                       t["row_count"]] for t in tables])
+
+
+def load(case, store, cfg: dict, *, threads: int | None = None, memory_limit: str | None = None,
+         reference_date: dt.date | None = None, include_dependent: bool = True) -> ScopeData:
+    mans, src_roles, tables = _plan(case, store)
+    con = connect(threads=threads, memory_limit=memory_limit)
+    ref = reference_date or _incident_end(case)
+    _src_tables(con, tables)
     _load_identity(con, store, tables)
     _prepare_identity(con, cfg, ref)
     if include_dependent:
@@ -151,6 +161,45 @@ def load(case, store, cfg: dict, *, threads: int | None = None, memory_limit: st
     return data
 
 
+SLICE_TABLES = ("ident", "dep", "dep_link", "dep_targets", "name_variants")
+
+
+def slices(case, store, cfg: dict, *, threads: int | None = None, memory_limit: str | None = None,
+           reference_date: dt.date | None = None, rows_per_pass: int = 3_000_000) -> Iterator[ScopeData]:
+    """The tables of :func:`load`, one slice at a time, for work that adds up over slices (the estimate).
+
+    Each source is handled on its own and split by a hash of the patient key into enough slices that none holds
+    more than ``rows_per_pass`` identity rows. Dependent rows link to identity rows only within their source and
+    by equal patient key, so every link falls inside one slice and per-slice results are exact. A slice's tables
+    are dropped when the caller asks for the next one, so memory is bounded by the largest slice and nothing is
+    spilled to disk.
+    """
+    mans, src_roles, tables = _plan(case, store)
+    con = connect(threads=threads, memory_limit=memory_limit)
+    ref = reference_date or _incident_end(case)
+    _src_tables(con, tables)
+    rows_per_pass = max(1, int(rows_per_pass))
+    for sid in sorted(mans):
+        sub = [t for t in tables if t["source_id"] == sid]
+        n_ident = sum(t["row_count"] for t in sub if t["role"] == "identity")
+        n = max(1, -(-n_ident // rows_per_pass))
+        for p in range(n):
+            part = (p, n) if n > 1 else None
+            _load_identity(con, store, sub, part)
+            _prepare_identity(con, cfg, ref)
+            _load_dependent(con, store, sub, part)
+            _link_dependent(con, sub)
+            data = ScopeData(con, sub, {sid: {"manifest": mans[sid], "evidence_role": src_roles.get(sid)}}, ref,
+                             counts={"slice": p, "slices": n})
+            yield data
+            for name in SLICE_TABLES:
+                con.execute(f"DROP TABLE IF EXISTS {name}")
+
+
+def _slice_filter(key_sql: str, part: tuple[int, int] | None) -> str:
+    return "" if part is None else f" WHERE hash({key_sql}) % {int(part[1])} = {int(part[0])}"
+
+
 def _incident_end(case) -> dt.date:
     end = (case.config.get("incident_window") or {}).get("end")
     if end:
@@ -158,7 +207,7 @@ def _incident_end(case) -> dt.date:
     raise NotReady("case has no incident window end (needed to determine minors)")
 
 
-def _load_identity(con, store, tables) -> None:
+def _load_identity(con, store, tables, part: tuple[int, int] | None = None) -> None:
     cols_sql = ", ".join(f'"{f}" {"DATE" if f in ("dob", "record_date") else "VARCHAR"}' for f in IDENTITY_FIELDS)
     con.execute(f"CREATE TABLE ident_raw(row_key VARCHAR, t_idx INTEGER, ordinal BIGINT, {cols_sql}, cat_own INTEGER)")
     for t in tables:
@@ -178,10 +227,11 @@ def _load_identity(con, store, tables) -> None:
                         sel.append(f'"{f}"::{"DATE" if f in ("dob", "record_date") else "VARCHAR"}')
                     else:
                         sel.append("NULL")
+                key = '"local_patient_key"::VARCHAR' if "local_patient_key" in present else "NULL::VARCHAR"
                 con.register("_b", tb)
                 con.execute(f"""INSERT INTO ident_raw SELECT "_row_key", {t['t_idx']},
                     TRY_CAST(split_part("_row_key", '|', 3) AS BIGINT), {', '.join(sel)},
-                    {_mask_sql(present, flags)} FROM _b""")
+                    {_mask_sql(present, flags)} FROM _b{_slice_filter(key, part)}""")
                 con.unregister("_b")
 
 
@@ -189,7 +239,7 @@ def _prepare_identity(con, cfg: dict, ref: dt.date) -> None:
     ident_cfg = cfg["identity"]
     ph = [p.upper() for p in ident_cfg["name_placeholders"]]
     particles = [p.upper() for p in ident_cfg["surname_particles"]]
-    con.execute("CREATE TABLE name_variants(name VARCHAR, canon VARCHAR)")
+    con.execute("CREATE OR REPLACE TABLE name_variants(name VARCHAR, canon VARCHAR)")
     rows = []
     for grp in cfg.get("name_variants") or []:
         canon = str(grp[0]).upper()
@@ -292,7 +342,7 @@ def _prepare_identity(con, cfg: dict, ref: dt.date) -> None:
     con.execute("DROP TABLE ident1")
 
 
-def _load_dependent(con, store, tables) -> None:
+def _load_dependent(con, store, tables, part: tuple[int, int] | None = None) -> None:
     con.execute("""CREATE TABLE dep_stage(t_idx INTEGER, patient_ref VARCHAR, record_date DATE, cat_mask INTEGER)""")
     con.execute("""CREATE TABLE dep_part(t_idx INTEGER, patient_ref VARCHAR, n_rows BIGINT, min_date DATE,
                    max_date DATE, n_null_date BIGINT, cat_mask INTEGER)""")
@@ -315,10 +365,11 @@ def _load_dependent(con, store, tables) -> None:
                 names = set(tb.column_names)
                 flags = {c for c in names if c.startswith("_has_")}
                 present = {f for f in FIELD_CATEGORIES if f in names}
-                ref = '"patient_ref"::VARCHAR' if "patient_ref" in names else "NULL"
+                ref = '"patient_ref"::VARCHAR' if "patient_ref" in names else "NULL::VARCHAR"
                 rd = '"record_date"::DATE' if "record_date" in names else "NULL"
                 con.register("_b", tb)
-                con.execute(f"INSERT INTO dep_stage SELECT {t['t_idx']}, {ref}, {rd}, {_mask_sql(present, flags)} FROM _b")
+                con.execute(f"INSERT INTO dep_stage SELECT {t['t_idx']}, {ref}, {rd}, {_mask_sql(present, flags)} "
+                            f"FROM _b{_slice_filter(ref, part)}")
                 con.unregister("_b")
                 staged += tb.num_rows
                 if staged >= 8_000_000:
@@ -343,7 +394,7 @@ def _link_dependent(con, tables) -> None:
         if not targets:
             targets = [x["t_idx"] for x in tables if x["source_id"] == t["source_id"] and x["role"] == "identity"]
         pairs += [[t["t_idx"], x] for x in targets]
-    con.execute("CREATE TABLE dep_targets(dep_t INTEGER, ident_t INTEGER)")
+    con.execute("CREATE OR REPLACE TABLE dep_targets(dep_t INTEGER, ident_t INTEGER)")
     if pairs:
         con.executemany("INSERT INTO dep_targets VALUES (?, ?)", pairs)
     con.execute("""

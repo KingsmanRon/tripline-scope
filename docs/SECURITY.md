@@ -81,7 +81,8 @@ Parquet magic appears in encrypted files; DuckDB cannot read a non-allow-listed 
 * Swap: data in RAM can be paged out. Disable swap or use encrypted swap; `tscope doctor` warns while swap is
   active and not attested.
 * Restore server storage, OS crash dumps and hypervisor snapshots are outside the product's control.
-* Memory limits: with spilling disabled, very large match runs need enough RAM (see README hardware); an
+* Memory limits: with spilling disabled, very large match runs need enough RAM (see README hardware). The
+  preliminary estimate works in slices instead (METHOD §5): about 40 bytes per identity row plus one slice. An
   administrator may enable spilling only to a directory on an encrypted volume (`duckdb.spill_dir` +
   `spill_dir_encrypted: true`).
 * Passphrases supplied through environment variables are for drills and demos only.

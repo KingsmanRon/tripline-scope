@@ -16,63 +16,121 @@ Method (all counts over *usable* identity rows; unresolvable rows are counted se
 
 People per exposure category use the same point method restricted to rows (identity row plus its linked
 dependent rows) that carry the category. The result is labelled preliminary in every output.
+
+Scale: each usable identity row is reduced to five 64-bit values (hashes of the SA ID and the three keys, plus the
+category mask) in ``est_rows``; all counts run over that table. :func:`estimate_sliced` fills it one slice of the
+extracts at a time (:func:`data.slices`), so the estimate needs memory for the largest slice plus about 40 bytes
+per identity row, not for the whole estate. Two different keys share a 64-bit hash with probability about
+n^2 / 2^65 (1e-5 at 20 million keys), far inside the estimate's 5 % margin.
 """
 
 from __future__ import annotations
 
-from .config import EXPOSURE_CATEGORIES
-from .data import CAT_BIT, ScopeData
+import time
 
-KEYS_SQL = """
-CREATE OR REPLACE TEMP TABLE est_rows AS
-SELECT i.row_id, i.sa_id,
+from .config import EXPOSURE_CATEGORIES
+from .data import CAT_BIT, ScopeData, slices
+
+EST_ROWS_SQL = """CREATE TABLE IF NOT EXISTS est_rows(sa_id UBIGINT, k_point UBIGINT, k_name UBIGINT,
+                                                    k_fine UBIGINT, cat_mask INTEGER)"""
+
+_NAME_KEY = """'N:' || coalesce(least(i.sx_first, i.sx_last), '') || '|' || coalesce(greatest(i.sx_first, i.sx_last), '')
+       || '|' || coalesce(strftime(i.dob_eff, '%Y%m%d'), '')"""
+
+KEYS_SQL = f"""
+INSERT INTO est_rows
+SELECT CASE WHEN i.sa_id IS NULL THEN NULL ELSE hash(i.sa_id) END,
   CASE WHEN i.sa_id IS NOT NULL THEN NULL
-       WHEN i.passport IS NOT NULL THEN 'P:' || i.passport
-       ELSE 'N:' || coalesce(least(i.sx_first, i.sx_last), '') || '|' || coalesce(greatest(i.sx_first, i.sx_last), '')
-            || '|' || coalesce(strftime(i.dob_eff, '%Y%m%d'), '') END AS k_point,
-  'N:' || coalesce(least(i.sx_first, i.sx_last), '') || '|' || coalesce(greatest(i.sx_first, i.sx_last), '')
-       || '|' || coalesce(strftime(i.dob_eff, '%Y%m%d'), '') AS k_name,
-  'C:' || coalesce(i.sx_last, '') || '|' || coalesce(strftime(i.dob_eff, '%Y%m%d'), '') AS k_coarse,
-  coalesce('P:' || i.passport, 'F:' || coalesce(i.first, '') || '|' || coalesce(i.last, '') || '|'
-       || coalesce(strftime(i.dob_eff, '%Y%m%d'), '')) AS k_fine,
-  i.cat_own | coalesce(d.dep_mask, 0) AS cat_mask
+       WHEN i.passport IS NOT NULL THEN hash('P:' || i.passport)
+       ELSE hash({_NAME_KEY}) END,
+  hash({_NAME_KEY}),
+  hash(coalesce('P:' || i.passport, 'F:' || coalesce(i.first, '') || '|' || coalesce(i.last, '') || '|'
+       || coalesce(strftime(i.dob_eff, '%Y%m%d'), ''))),
+  i.cat_own | coalesce(d.dep_mask, 0)
 FROM ident i
 LEFT JOIN (SELECT l.row_id, bit_or(d.cat_mask) AS dep_mask FROM dep_link l
            JOIN dep d USING (t_idx, patient_ref) GROUP BY l.row_id) d USING (row_id)
 WHERE i.usable
 """
 
+UNRESOLVABLE_SQL = """
+SELECT (SELECT count(*) FROM ident WHERE NOT usable),
+       (SELECT coalesce(sum(d.n_rows), 0) FROM dep d WHERE NOT EXISTS (
+          SELECT 1 FROM dep_link l WHERE l.t_idx = d.t_idx AND l.patient_ref IS NOT DISTINCT FROM d.patient_ref))
+"""
 
-def _counts(data: ScopeData, where: str, margin: float = 0.05) -> dict:
-    con = data.con
-    con.execute(f"CREATE OR REPLACE TEMP TABLE est_sub AS SELECT * FROM est_rows WHERE {where}")
-    n_id = con.execute("SELECT count(DISTINCT sa_id) FROM est_sub").fetchone()[0]
-    point = con.execute("""
-        SELECT count(DISTINCT s.k_point) FROM est_sub s
-        WHERE s.sa_id IS NULL AND NOT EXISTS (SELECT 1 FROM est_id_names n WHERE n.k = s.k_point)""").fetchone()[0]
-    upper = con.execute("SELECT count(DISTINCT k_fine) FROM est_sub WHERE sa_id IS NULL").fetchone()[0]
+
+def _margin(cfg: dict | None) -> float:
+    return float(((cfg or {}).get("estimate") or {}).get("lower_margin", 0.05))
+
+
+def _counts(con, where: str, margin: float) -> dict:
+    n_id, point, upper = con.execute(f"""
+        SELECT count(DISTINCT sa_id),
+               count(DISTINCT k_point) FILTER (WHERE sa_id IS NULL AND NOT id_name),
+               count(DISTINCT k_fine) FILTER (WHERE sa_id IS NULL)
+        FROM est_x WHERE {where}""").fetchone()
     point = int(n_id + point)
     return {"point": point, "lower": int(point * (1.0 - margin)), "upper": int(n_id + upper),
             "people_with_valid_sa_id": int(n_id)}
 
 
-def estimate(data: ScopeData) -> dict:
-    con = data.con
-    con.execute(KEYS_SQL)
-    con.execute("CREATE OR REPLACE TEMP TABLE est_id_names AS SELECT DISTINCT k_name AS k FROM est_rows WHERE sa_id IS NOT NULL")
-    margin = float(((getattr(data, "cfg", None) or {}).get("estimate") or {}).get("lower_margin", 0.05))
-    total = _counts(data, "TRUE", margin)
+def _summarise(con, margin: float) -> dict:
+    # a row's point key "already carried by an ID row" is decided once, over the whole estate
+    con.execute("""CREATE OR REPLACE TEMP TABLE est_x AS
+        SELECT r.sa_id, r.k_point, r.k_fine, r.cat_mask, (n.k IS NOT NULL) AS id_name
+        FROM est_rows r LEFT JOIN (SELECT DISTINCT k_name AS k FROM est_rows WHERE sa_id IS NOT NULL) n
+             ON n.k = r.k_point""")
+    total = _counts(con, "TRUE", margin)
     per_cat = {}
     for c in EXPOSURE_CATEGORIES:
         bit = CAT_BIT[c]
-        if con.execute(f"SELECT count(*) FROM est_rows WHERE cat_mask & {bit} <> 0").fetchone()[0] == 0:
+        if con.execute(f"SELECT count(*) FROM est_x WHERE cat_mask & {bit} <> 0").fetchone()[0] == 0:
             per_cat[c] = {"point": 0, "lower": 0, "upper": 0}
             continue
-        r = _counts(data, f"cat_mask & {bit} <> 0", margin)
+        r = _counts(con, f"cat_mask & {bit} <> 0", margin)
         per_cat[c] = {k: r[k] for k in ("point", "lower", "upper")}
+    con.execute("DROP TABLE est_x")
     total["per_category"] = per_cat
     total["lower_bound_basis"] = (f"point estimate minus {margin:.0%}: calibrated on synthetic data, where the "
                                   "estimate was 2.2-2.7 % above the true count; not a guarantee")
     total["method"] = ("exact distinct SA ID numbers + distinct phonetic (soundex) name and date-of-birth keys for "
                        "rows without an ID, excluding keys already carried by an ID row")
     return total
+
+
+def estimate(data: ScopeData, cfg: dict | None = None) -> dict:
+    """Estimate from data already loaded in full (:func:`data.load`)."""
+    con = data.con
+    con.execute("DROP TABLE IF EXISTS est_rows")
+    con.execute(EST_ROWS_SQL)
+    con.execute(KEYS_SQL)
+    return _summarise(con, _margin(cfg))
+
+
+def estimate_sliced(case, store, cfg: dict, *, threads: int | None = None, memory_limit: str | None = None,
+                    reference_date=None) -> dict:
+    """Estimate one slice of the extracts at a time (see the module docstring); same result as :func:`estimate`.
+
+    Returns ``estimate``, ``unresolvable``, ``tables``, ``sources``, ``reference_date``, ``slices`` and timings."""
+    rows_per_pass = int(((cfg.get("estimate") or {}).get("rows_per_pass")) or 3_000_000)
+    t0 = time.time()
+    unres_id = unres_dep = n_slices = 0
+    tables, sources, con, ref = [], {}, None, None
+    for d in slices(case, store, cfg, threads=threads, memory_limit=memory_limit, reference_date=reference_date,
+                    rows_per_pass=rows_per_pass):
+        con, ref = d.con, d.reference_date
+        con.execute(EST_ROWS_SQL)
+        con.execute(KEYS_SQL)
+        a, b = con.execute(UNRESOLVABLE_SQL).fetchone()
+        unres_id, unres_dep, n_slices = unres_id + int(a), unres_dep + int(b), n_slices + 1
+        if d.counts["slice"] == 0:
+            tables += d.tables
+            sources |= d.sources
+    t1 = time.time()
+    est = _summarise(con, _margin(cfg))
+    con.close()
+    return {"estimate": est, "reference_date": ref, "tables": tables, "sources": sources, "slices": n_slices,
+            "rows_per_pass": rows_per_pass,
+            "unresolvable": {"identity_rows_without_identifiers": unres_id, "dependent_rows_unlinked": unres_dep},
+            "timings_s": {"load": round(t1 - t0, 3), "estimate": round(time.time() - t1, 3)}}

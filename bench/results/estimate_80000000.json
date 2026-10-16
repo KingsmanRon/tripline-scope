@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-16",
+  "estimate": {
+    "lower": 10964676,
+    "point": 11541765,
+    "upper": 13039938
+  },
+  "estimate_error_vs_truth": 0.01854995316180951,
+  "estimate_path_s": 265.9,
+  "hardware": {
+    "cpu_model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpus": 4,
+    "memory_gb": 15.7,
+    "platform": "Linux-6.18.44-fc-v139-x86_64-with-glibc2.39",
+    "shared_machine_note": "measured on a development machine shared with other workloads"
+  },
+  "method_version": "scope-method/0.1.0",
+  "note": "estimate_path (sliced load + estimate) is the preliminary-estimate path after ingest; synth and extract stand in for ingest.",
+  "peak_rss_mb": {
+    "estimate_path": 4888,
+    "extract": 2592
+  },
+  "rows": {
+    "admissions": 80000000,
+    "billing": 40002235,
+    "patients": 19884019,
+    "results": 97598830
+  },
+  "rows_per_pass": 3000000,
+  "schema": "tripline.estimate-bench/v1",
+  "slices": 12,
+  "timings_s": {
+    "estimate": 8.404,
+    "estimate_path": 265.9,
+    "extract": 561.48,
+    "load": 257.501
+  },
+  "true_people": 11331565,
+  "truth_within_bounds": true,
+  "unresolvable": {
+    "dependent_rows_unlinked": 2612605,
+    "identity_rows_without_identifiers": 179411
+  }
+}
