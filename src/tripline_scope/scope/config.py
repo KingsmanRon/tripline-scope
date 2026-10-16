@@ -68,8 +68,10 @@ DEFAULTS: dict = {
         # pairs whose first names contradict (not equal, not similar, not swapped, not a middle name or variant)
         "first_name_contradiction": "non_link",
         # both dates of birth recorded, not a slip (one character, one day, day/month swap or one year) and the
-        # records do not share a valid SA ID: within a year of each other → at most review ...
-        "dob_contradiction": "review",
+        # records do not share a valid SA ID → different people. Measured on 10M synthetic rows, 95 % of such pairs
+        # were different people (mostly same-household siblings with similar names); treating them as non-links
+        # keeps them apart (never merges people) and spares reviewers ~750 decisions. Set "review" to queue them.
+        "dob_contradiction": "non_link",
         # ... two or more years apart (a parent and child or two siblings sharing a name) → non-link
         "dob_years_apart": "non_link",
         # two valid but different SA ID numbers (Luhn catches every single-digit typo, so these are two IDs)

@@ -52,8 +52,10 @@ away, and rare values (an uncommon surname) count for more than common ones. The
 passport number, first name (exact, a known variant, similar spelling, swapped with the surname, matching the
 other record's middle name, or an initial), surname (exact, swapped, matching a maiden or married surname,
 similar spelling), date of birth (exact, a one-character or one-day slip, day and month swapped, a one-year
-slip, or the same year), sex, phone (adjusted for how many records share the number), e-mail, medical-aid number
-and postal code.
+slip, or the same year), sex, phone (adjusted for how many records share the number), e-mail, medical-aid number,
+postal code, middle names (equal, sharing a name, or different) and street address (equal or similar spelling).
+Address is shared by a household, so on its own it never links people; it separates unrelated people who happen
+to share a common name and birthday, while names, dates of birth and the rules below separate household members.
 
 > *Technical.* Candidate pairs come from these blocking keys (any one suffices): same ID number; same passport;
 > soundex of surname + date of birth; soundex of first name + date of birth; sorted soundex of first name and
@@ -86,7 +88,11 @@ whatever the score:
 * **One record names the other as its guardian** (guardian ID = the other's ID) → not linked.
 * **Dates of birth two or more years apart** (and not a slip) → not linked, unless both records carry the same
   valid ID number. *This keeps a parent and child, or two siblings, who share a name apart.*
-* **Dates of birth that contradict but are within a year** → at most the review band.
+* **Dates of birth that contradict but are within a year** (and not a slip, and no shared valid ID) → not linked.
+  On 10 million synthetic rows 95 % of such pairs were different people — mostly siblings in one household with
+  similar first names. Keeping them apart can only count a person twice, never merge two people, so the error goes
+  in the direction of notifying more people. A hospital can send them to review instead (`guards.dob_contradiction:
+  review` in its profile).
 
 ### 2.5 Reviewing uncertain pairs
 

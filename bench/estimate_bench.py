@@ -38,6 +38,7 @@ def main(argv=None) -> int:
     ap.add_argument("--workdir")
     ap.add_argument("--synth", help="reuse an existing synthetic dataset directory")
     ap.add_argument("--threads", type=int)
+    ap.add_argument("--memory-limit", help="DuckDB memory limit, e.g. 13GB (default: DuckDB's 80%% of RAM)")
     ap.add_argument("--seed", type=int, default=20260914)
     args = ap.parse_args(argv)
     work = Path(args.workdir) if args.workdir else Path(tempfile.mkdtemp(prefix="estimate-bench-"))
@@ -70,7 +71,8 @@ def main(argv=None) -> int:
     mark("extract", t0)
     cfg = config.load(case)
     t0 = time.time()
-    d = data.load(case, store, cfg, threads=args.threads, reference_date=synth_reference_date(syn))
+    d = data.load(case, store, cfg, threads=args.threads, memory_limit=args.memory_limit,
+                  reference_date=synth_reference_date(syn))
     mark("load", t0)
     t0 = time.time()
     est = estimate.estimate(d)

@@ -66,13 +66,16 @@ class Matcher:
         CREATE OR REPLACE TABLE rec_rows AS
         SELECT row_id, CASE WHEN sa_id IS NOT NULL AND dob_consistent THEN
                min(row_id) OVER (PARTITION BY first, middle, last, maiden, sa_id, passport, dob_eff, sex, phone,
-                                 phone_alt, email, postal, med, guardian_sa_id) ELSE row_id END AS rid
+                                 phone_alt, email, postal, med, guardian_sa_id,
+                                 nullif(trim(regexp_replace(upper(address), '[^A-Z0-9]+', ' ', 'g')), ''))
+               ELSE row_id END AS rid
         FROM ident WHERE usable ORDER BY row_id""")
         con.execute(f"""
         CREATE OR REPLACE TABLE recs AS
         WITH r AS (
           SELECT i.row_id AS rid, i.row_key, i.first, i.first_c, i.middle, i.last, i.maiden, i.sa_id, i.passport,
                  i.dob_eff, i.dob_chk, i.dob_consistent, i.sex, i.phone, i.phone_alt, i.email, i.postal, i.med, i.guardian_sa_id,
+                 nullif(trim(regexp_replace(upper(i.address), '[^A-Z0-9]+', ' ', 'g')), '') AS addr,
                  i.sx_first, i.sx_last, i.sx_maiden,
                  least(i.sx_first, i.sx_last) || greatest(i.sx_first, i.sx_last) AS sx_pair,
                  year(i.dob_eff) AS birth_year, strftime(i.dob_eff, '%m%d') AS birthday
@@ -162,6 +165,20 @@ class Matcher:
                 cll.NullLevel("med"), cll.ExactMatchLevel("med"), cll.ElseLevel()]),
             cl.CustomComparison(output_column_name="postal", comparison_levels=[
                 cll.NullLevel("postal"), cll.ExactMatchLevel("postal"), cll.ElseLevel()]),
+            # middle names: agreement is strong evidence, a conflict (both recorded, no shared name) is evidence against
+            cl.CustomComparison(output_column_name="middle", comparison_levels=[
+                cll.NullLevel("middle"),
+                cll.ExactMatchLevel("middle"),
+                cll.CustomLevel("list_has_any(string_split(middle_l, ' '), string_split(middle_r, ' '))",
+                                label_for_charts="share a middle name"),
+                cll.ElseLevel()]),
+            # street address (normalised): shared within households, so it separates unrelated people who share a
+            # common name and birthday, while names, birth date and the guards separate household members
+            cl.CustomComparison(output_column_name="addr", comparison_levels=[
+                cll.NullLevel("addr"),
+                cll.ExactMatchLevel("addr"),
+                cll.JaroWinklerLevel("addr", hi),
+                cll.ElseLevel()]),
         ]
         rules_map = {
             "sa_id": [block_on("sa_id")],
