@@ -50,7 +50,7 @@ def test_bak_restore_extract_and_closure_drop(mssql_case, demo_baks):
     assert tabs["dbo.results"]["role"] == "dependent" and tabs["dbo.misc"]["extracted"] is False
     pats = read_extract(store, sid, "dbo_patients").to_pylist()
     assert len(pats) == 300 and sum(1 for p in pats if p["sa_id"]) == 288
-    assert [p["_row_key"] for p in pats[:2]] == [f"{sid}|dbo_patients|1", f"{sid}|dbo_patients|2"]
+    assert [p["_row_key"] for p in pats[:2]] == [f"{sid}|dbo_patients|0", f"{sid}|dbo_patients|1"]
     assert all(p["dob"] is not None for p in pats)
     doc = store.read_json(f"work/discovery/{sid}.json")
     t = next(t for t in doc["tables"] if t["slug"] == "dbo_patients")

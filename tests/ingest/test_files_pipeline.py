@@ -65,7 +65,7 @@ def test_csv_ingest_end_to_end(op_case, tmp_path):
     ext = read_extract(store, sid, "patients").to_pylist()
     assert len(ext) == 200
     first = ext[0]
-    assert first["_row_key"] == f"{sid}|patients|1" and first["sa_id"] and first["phone"].startswith("+27")
+    assert first["_row_key"] == f"{sid}|patients|0" and first["sa_id"] and first["phone"].startswith("+27")
     assert first["_has_identity_number"] and first["_has_contact_details"] and first["_has_medical_aid"]
     assert first["dob"] is not None and first["email"] == first["email"].lower()
     res_rows = read_extract(store, sid, "results").to_pylist()

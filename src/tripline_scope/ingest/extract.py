@@ -218,7 +218,7 @@ def extract_source(reader, store, discovery: dict, *, source_id: str, batch_rows
                 for batch in reader.iter_batches(table, batch_rows):
                     if batch.num_rows == 0:
                         continue
-                    ords = pa.array(range(ordinal + 1, ordinal + 1 + batch.num_rows), type=pa.int64())
+                    ords = pa.array(range(ordinal, ordinal + batch.num_rows), type=pa.int64())  # 0-based (PLAN §5)
                     ordinal += batch.num_rows
                     t = pa.Table.from_batches([batch]).append_column("_ord", ords)
                     con.register("batch", t)
