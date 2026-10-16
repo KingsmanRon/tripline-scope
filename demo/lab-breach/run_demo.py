@@ -168,7 +168,8 @@ def main() -> int:
     login("olivia", env)
     run("scope match", ["scope", "match", "--case", str(case)], env)
     login("rami", env)
-    run("scope review (scripted)", ["scope", "decide", "--case", str(case), "--auto-demo"], env)
+    run("scope review (simulated reviewer)", ["scope", "decide", "--case", str(case), "--simulate-reviewer",
+                                               str(work / "synth" / "ground_truth.parquet")], env)
     login("olivia", env)
     run("scope match (replay decisions)", ["scope", "match", "--case", str(case)], env)
     run("scope report", ["scope", "report", "--case", str(case)], env)

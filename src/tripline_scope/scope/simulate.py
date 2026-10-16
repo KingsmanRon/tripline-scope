@@ -46,15 +46,19 @@ def row_truth(con, gt_path: Path) -> None:
     con.register("_gd", pa.table({"source_db": list(gtdbs), "db_tok": list(gtdbs.values())}))
     con.execute("CREATE OR REPLACE TABLE gdb AS SELECT * FROM _gd")
     con.unregister("_gd")
+    # Two equi-joins (an OR inside one join condition degenerates into a nested-loop join on large estates).
     con.execute("""
     CREATE OR REPLACE TABLE truth AS
-    SELECT i.row_key, any_value(g.person_id) AS person_id
-    FROM ident i JOIN tmap m ON m.t_idx = i.t_idx
-    JOIN gt g ON (
-         (m.leak AND g."table" = 'leak_sample' AND g.local_patient_key = (i.ordinal + 1)::VARCHAR)
-      OR (NOT m.leak AND g."table" = m.tbl AND g.local_patient_key = i.local_key
-          AND g.source_db IN (SELECT source_db FROM gdb WHERE gdb.db_tok = m.db_tok)))
-    GROUP BY i.row_key""")
+    SELECT row_key, any_value(person_id) AS person_id FROM (
+      SELECT i.row_key, g.person_id
+      FROM ident i JOIN tmap m ON m.t_idx = i.t_idx AND m.leak
+      JOIN gt g ON g."table" = 'leak_sample' AND g.local_patient_key = (i.ordinal + 1)::VARCHAR
+      UNION ALL
+      SELECT i.row_key, g.person_id
+      FROM ident i JOIN tmap m ON m.t_idx = i.t_idx AND NOT m.leak
+      JOIN gdb d ON d.db_tok = m.db_tok
+      JOIN gt g ON g.source_db = d.source_db AND g."table" = m.tbl AND g.local_patient_key = i.local_key)
+    GROUP BY row_key""")
 
 
 def simulate_decisions(case, store, cfg: dict, items: list[dict], gt_path: Path, reviewer: str) -> list[dict]:

@@ -26,13 +26,13 @@ def load_ground_truth(con, gt_path: Path | str, source_map: dict[str, str]) -> N
     con.executemany("INSERT INTO _srcmap VALUES (?, ?)", [[k, v] for k, v in source_map.items()])
     con.execute("""
     CREATE OR REPLACE TABLE gt_rows AS
-    SELECT i.row_id, g.person_id, g.is_minor, g.has_guardian, g.has_contact, g.usable AS gt_usable, i.usable
-    FROM ident i
-    JOIN src_tables t ON t.t_idx = i.t_idx
-    JOIN _srcmap m ON m.source_id = t.source_id
-    JOIN _gt g ON g.source_db = m.db AND (
-         (g."table" = 'patients' AND g.local_patient_key = i.local_key)
-         OR (g."table" = 'leak_sample' AND g.local_patient_key = (i.ordinal + 1)::VARCHAR))""")
+    WITH base AS (SELECT i.row_id, i.usable, i.local_key, (i.ordinal + 1)::VARCHAR AS ord1, m.db
+                  FROM ident i JOIN src_tables t ON t.t_idx = i.t_idx JOIN _srcmap m ON m.source_id = t.source_id)
+    SELECT b.row_id, g.person_id, g.is_minor, g.has_guardian, g.has_contact, g.usable AS gt_usable, b.usable
+    FROM base b JOIN _gt g ON g.source_db = b.db AND g."table" = 'patients' AND g.local_patient_key = b.local_key
+    UNION ALL
+    SELECT b.row_id, g.person_id, g.is_minor, g.has_guardian, g.has_contact, g.usable AS gt_usable, b.usable
+    FROM base b JOIN _gt g ON g.source_db = b.db AND g."table" = 'leak_sample' AND g.local_patient_key = b.ord1""")
     con.unregister("_gt")
 
 
