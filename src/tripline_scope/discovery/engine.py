@@ -15,6 +15,7 @@ deterministic for identical input (no timestamps), so reports built on it are by
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -35,12 +36,9 @@ from .classify import (
     resolve_keys,
     resolve_names,
 )
+from .hints import tokenise
 from .values import Profile, match_sql, null_sql, profile_values, sample_rate
 
-# Fields fed by a single best column; the remaining fields are handled specially in plan_fields.
-_SINGLE_FIELDS = ("sa_id", "passport_no", "last_name", "full_name", "maiden_name", "dob", "sex", "medical_aid_no",
-                  "local_patient_key", "patient_ref", "email", "postal_code", "language", "guardian_name",
-                  "guardian_phone", "guardian_email", "guardian_sa_id", "record_date")
 # A table is extracted when it has at least one of these (rows that can be linked to, or describe, a person).
 _LINKABLE_FIELDS = {"sa_id", "passport_no", "first_name", "last_name", "full_name", "maiden_name", "dob",
                     "medical_aid_no", "local_patient_key", "patient_ref", "phone", "email", "address",
@@ -297,25 +295,39 @@ def _containment(st: TableState, c: ColumnState, ident: TableState) -> float | N
 
 
 # ------------------------------------------------------------------------------------------ field plan
+_SLOTS = {"phone": ("phone", "phone_alt")}      # a second phone column goes to phone_alt
+_COMPOSED = {"address": 6}                      # address parts (line, suburb, city ...) form one address
+_ALT_TOKENS = re.compile(r"(?:^|_)(?:alt|alternative|other|second|secondary|work|office|home|landline|fax|2)(?:_|$)")
+
+
 def plan_fields(cols: list[dict]) -> dict[str, list[str]]:
-    """Map standard fields to the source columns (by name) that feed them, best column first."""
+    """Assign source columns to standard fields: one column per field, never filling one column's gaps with
+    another's values. The best column (confidence, then a primary-looking name, then column order) takes the
+    field; a second phone takes ``phone_alt``; columns left without a slot get ``standard_field: null`` and a
+    reason (they are still classified and flagged). Address parts are joined in column order."""
     usable = [c for c in cols if c["standard_field"] and c["category"] in SPECS
               and SPECS[c["category"]].standard_field is not None and c["confidence"] >= MIN_EXTRACT_CONFIDENCE]
-    usable.sort(key=lambda c: (-c["confidence"], c["position"]))
-    fields: dict[str, list[str]] = {}
-    for c in usable:
-        fields.setdefault(c["standard_field"], []).append(c["name"])
+    usable.sort(key=lambda c: (-c["confidence"], bool(_ALT_TOKENS.search(tokenise(c["name"]))), c["position"]))
     out: dict[str, list[str]] = {}
-    for f in _SINGLE_FIELDS:
-        if fields.get(f):
-            out[f] = fields[f][:3]
-    if fields.get("phone"):
-        out["phone"] = fields["phone"][:4]
-    for f in ("first_name", "middle_names"):
-        if fields.get(f):
-            out[f] = fields[f][:2]
-    if fields.get("address"):
-        out["address"] = sorted(fields["address"], key=lambda n: next(c["position"] for c in cols if c["name"] == n))[:6]
+    for c in usable:
+        f = c["standard_field"]
+        if f in _COMPOSED:
+            parts = out.setdefault(f, [])
+            if len(parts) < _COMPOSED[f]:
+                parts.append(c["name"])
+                continue
+            free = None
+        else:
+            free = next((slot for slot in _SLOTS.get(f, (f,)) if slot not in out), None)
+        if free is None:
+            c["standard_field"] = None
+            c["reasons"] = list(c["reasons"]) + [f"no_free_standard_field_slot_for_{f}"]
+            continue
+        out[free] = [c["name"]]
+        c["standard_field"] = free
+    for f in _COMPOSED:
+        if f in out:
+            out[f].sort(key=lambda n: next(c["position"] for c in cols if c["name"] == n))
     return out
 
 

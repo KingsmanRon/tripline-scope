@@ -76,7 +76,7 @@ def build_sql(source_id: str, tdoc: dict) -> str:
     for n in fields.get("passport_no", []):
         x = f"upper(regexp_replace({v(n)}, '[\\s\\-]', '', 'g'))"
         pp.append(f"(CASE WHEN regexp_full_match({x}, '[A-Z0-9]{{6,15}}') THEN {x} END)")
-    for n in fields.get("sa_id", []):
+    for n in ([] if pp else fields.get("sa_id", [])):     # only when there is no passport column
         x = f"upper(regexp_replace({v(n)}, '\\s', '', 'g'))"
         pp.append(f"(CASE WHEN {sa_id_norm_sql(v(n), cols[n]['id_pad'])} IS NULL AND tscope_passport_like({v(n)}) "
                   f"AND NOT regexp_full_match(tscope_digits({v(n)}), '[0-9]+') THEN {x} END)")
@@ -133,13 +133,8 @@ def build_sql(source_id: str, tdoc: dict) -> str:
     out["postal_code"] = _coalesce([f"nullif(upper(trim({v(n)})), '')" for n in fields.get("postal_code", [])])
 
     # contact
-    phones = fields.get("phone", [])
-    for i, n in enumerate(phones):
-        prep.append(f"tscope_phone_e164({v(n)}) AS _ph{i}")
-    if phones:
-        main = _coalesce([f"_ph{i}" for i in range(len(phones))])
-        out["phone"] = main
-        out["phone_alt"] = _coalesce([f"(CASE WHEN _ph{i} <> {main} THEN _ph{i} END)" for i in range(len(phones))])
+    out["phone"] = _coalesce([f"tscope_phone_e164({v(n)})" for n in fields.get("phone", [])])
+    out["phone_alt"] = _coalesce([f"tscope_phone_e164({v(n)})" for n in fields.get("phone_alt", [])])
     out["email"] = _coalesce([f"tscope_email_norm({v(n)})" for n in fields.get("email", [])])
     out["guardian_email"] = _coalesce([f"tscope_email_norm({v(n)})" for n in fields.get("guardian_email", [])])
     out["guardian_phone"] = _coalesce([f"tscope_phone_e164({v(n)})" for n in fields.get("guardian_phone", [])])

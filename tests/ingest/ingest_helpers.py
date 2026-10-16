@@ -11,6 +11,7 @@ from pathlib import Path
 
 from tripline_scope import testing
 from tripline_scope.core.identifiers import luhn_check_digit, make_sa_id
+from tripline_scope.ingest.model import ColumnInfo, TableRef, batch_from_columns
 
 FIRST = ["Nomvula", "Thabo", "Lerato", "Sipho", "Ayanda", "Pieter", "Annelie", "Johan", "Zanele", "Kagiso", "Fatima",
          "Rajesh", "Precious", "Bongani", "Lindiwe", "Mpho", "Naledi", "Tshepo", "Refilwe", "Karabo"]
@@ -152,3 +153,32 @@ def scan_text_for(text: str, values: set[str]) -> list[str]:
 
 
 DIGITS = re.compile(r"\d")
+
+
+class ListReader:
+    """In-memory reader over {table: {column: [values]}} for discovery unit tests."""
+
+    engine = "memory"
+
+    def __init__(self, tables: dict[str, dict[str, list]], numeric: set[str] = frozenset()):
+        self._data = tables
+        self._numeric = numeric
+
+    def tables(self):
+        return [TableRef(name, [ColumnInfo(c, numeric=f"{name}.{c}" in self._numeric) for c in cols], kind="file")
+                for name, cols in self._data.items()]
+
+    def iter_batches(self, table, batch_rows, limit=None):
+        cols = list(self._data[table.name].values())
+        n = len(cols[0]) if cols else 0
+        if limit is not None:
+            n = min(n, limit)
+        for s in range(0, n, batch_rows):
+            yield batch_from_columns([[None if v is None else str(v) for v in c[s:s + batch_rows]] for c in cols],
+                                     len(cols))
+
+    def count_rows(self, table):
+        return len(next(iter(self._data[table.name].values())))
+
+    def close(self):
+        pass

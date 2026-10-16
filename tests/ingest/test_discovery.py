@@ -5,41 +5,12 @@ import random
 
 import ingest_helpers as H
 import pytest
+from ingest_helpers import ListReader
 
 from tripline_scope.core.errors import ConfigError
 from tripline_scope.core.identifiers import make_sa_id
 from tripline_scope.discovery.engine import discover
 from tripline_scope.discovery.hints import name_hint
-from tripline_scope.ingest.model import ColumnInfo, TableRef, batch_from_columns
-
-
-class ListReader:
-    """In-memory reader over {table: {column: [values]}} for discovery unit tests."""
-
-    engine = "memory"
-
-    def __init__(self, tables: dict[str, dict[str, list]], numeric: set[str] = frozenset()):
-        self._data = tables
-        self._numeric = numeric
-
-    def tables(self):
-        return [TableRef(name, [ColumnInfo(c, numeric=f"{name}.{c}" in self._numeric) for c in cols], kind="file")
-                for name, cols in self._data.items()]
-
-    def iter_batches(self, table, batch_rows, limit=None):
-        cols = list(self._data[table.name].values())
-        n = len(cols[0]) if cols else 0
-        if limit is not None:
-            n = min(n, limit)
-        for s in range(0, n, batch_rows):
-            yield batch_from_columns([[None if v is None else str(v) for v in c[s:s + batch_rows]] for c in cols],
-                                     len(cols))
-
-    def count_rows(self, table):
-        return len(next(iter(self._data[table.name].values())))
-
-    def close(self):
-        pass
 
 
 def _cats(doc, table):
@@ -158,7 +129,13 @@ def test_numeric_ids_with_dropped_leading_zeros():
     ("folder_no", "", "patient_key"), ("mrn", "", "patient_key"), ("NextOfKinTel", "", "guardian_phone"),
     ("ResultID", "results", "other_identifier"), ("value", "lab_results", "test_result"),
     ("value", "billing", None), ("invoice_no", "", "other_identifier"), ("ip_address", "", "not_address"),
-    ("account_no", "", "other_identifier"), ("bank_acc_no", "", "bank_account"), ("CardNo", "", "card_number"),
+    ("account_no", "", "account_no"), ("bank_acc_no", "", "bank_account"), ("CardNo", "", "card_number"),
+    ("nok_contact", "", "guardian_phone"), ("parent_contact", "", "guardian_phone"), ("cell_mother", "", "guardian_phone"),
+    ("caregiver_email", "", "guardian_email"), ("parent_guardian", "", "guardian_name"), ("foreign_id", "", "passport"),
+    ("postal", "", "postal_code"), ("postal_address", "", "address"), ("sex_code", "", "sex"),
+    ("other_names", "", "other_names"), ("client_ref", "", "patient_key"), ("unit", "", None),
+    ("result_status", "results", "not_result"), ("order_code", "results", "test_code"),
+    ("debit_account", "", "bank_account"), ("episode_start", "", "record_date"), ("opened", "", "record_date"),
     ("date_of_birth", "", "dob"), ("admission_date", "", "record_date"), ("ICD10Code", "", "icd10"),
 ])
 def test_name_hints(name, table, expected):

@@ -89,7 +89,8 @@ _SEP = re.compile(r"[\s\-]")
 _NAME_RX = re.compile(r"^[^\W\d_][^\W\d_ '’.\-]*(?:[ '’.\-]+[^\W\d_][^\W\d_ '’.\-]*){0,5}\.?$")
 SEX_VALUES = {"M", "F", "U", "MALE", "FEMALE", "UNKNOWN", "MAN", "WOMAN", "MANLIK", "VROULIK", "V", "O", "OTHER",
               "I", "INDETERMINATE"}
-SEX_MAP = {"M": "M", "MALE": "M", "MAN": "M", "MANLIK": "M", "F": "F", "FEMALE": "F", "WOMAN": "F", "VROULIK": "F",
+SEX_ISO = {"0", "1", "2", "9"}       # ISO/IEC 5218: 0 not known, 1 male, 2 female, 9 not applicable
+SEX_MAP = {"1": "M", "2": "F", "0": "U", "9": "U", "M": "M", "MALE": "M", "MAN": "M", "MANLIK": "M", "F": "F", "FEMALE": "F", "WOMAN": "F", "VROULIK": "F",
            "V": "F", "U": "U", "UNKNOWN": "U", "O": "U", "OTHER": "U", "I": "U", "INDETERMINATE": "U"}
 
 
@@ -125,7 +126,7 @@ def bank_like(value: str) -> bool:
 
 
 CHECKS = ("sa_id", "passport", "phone", "phone_formatted", "email", "date", "icd10", "card", "digits", "name",
-          "sex", "postal", "med_aid", "free_text", "bank", "digits13")
+          "sex", "sex_iso", "postal", "med_aid", "free_text", "bank", "digits13")
 
 
 @dataclass
@@ -192,6 +193,8 @@ def profile_values(values: list[str | None], *, id_pad: bool = False, distinct_c
             counts["name"] += 1
         if s.strip().upper() in SEX_VALUES:
             counts["sex"] += 1
+        elif s.strip() in SEX_ISO:
+            counts["sex_iso"] += 1
         if re.fullmatch(r"\s*\d{4}\s*", s):
             counts["postal"] += 1
         if medical_aid_like(s):
@@ -258,7 +261,7 @@ def match_sql(category: str, v: str, *, date_parser: str | None = None, id_pad: 
             return "false"
         return f"({date_sql(v, date_parser)} IS NOT NULL)"
     if category == "sex":
-        vals = ", ".join(f"'{s}'" for s in sorted(SEX_VALUES))
+        vals = ", ".join(f"'{s}'" for s in sorted(SEX_VALUES | SEX_ISO))
         return f"(upper(trim({v})) IN ({vals}))"
     if category == "postal_code":
         return f"(coalesce(regexp_full_match(trim({v}), '[0-9]{{4}}'), false))"

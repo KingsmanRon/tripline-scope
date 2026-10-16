@@ -89,6 +89,8 @@ def classify_column(column: str, table: str, prof: Profile, *, numeric: bool = F
             return d.set("guardian_sa_id", 0.95 if r("sa_id") >= 0.9 else 0.75, "hint", "name_hint+valid_sa_id")
         return d.set("other_identifier", 0.5, "hint", "name_hint_but_no_valid_sa_id")
     if hint == "guardian_phone":
+        if r("email") >= 0.5:      # "parent_contact" holding e-mail addresses
+            return d.set("guardian_email", 0.9, "hint", "guardian_context+email_values")
         return d.set("guardian_phone", 0.95 if r("phone") >= 0.5 else 0.6, "hint", "name_hint")
     if hint == "guardian_email":
         return d.set("guardian_email", 0.95 if r("email") >= 0.5 else 0.6, "hint", "name_hint")
@@ -118,6 +120,10 @@ def classify_column(column: str, table: str, prof: Profile, *, numeric: bool = F
         return d.set("email", 0.8 if r("email") >= 0.3 else 0.5, "hint", "name_hint")
     if hint == "phone":
         return d.set("phone", 0.95 if r("phone") >= 0.5 else 0.6, "hint", "name_hint")
+    if hint == "contact":
+        if r("email") >= 0.5:
+            return d.set("email", 0.85, "hint", "contact_column_with_email_values")
+        return d.set("phone", 0.85 if r("phone") >= 0.5 else 0.5, "hint", "contact_column_with_phone_values")
     if r("phone_formatted") >= 0.9 and prof.distinct_ratio >= 0.3 and hint is None:
         return d.set("phone", 0.75, "values", "sa_phone_format_without_name_hint")
 
@@ -128,14 +134,16 @@ def classify_column(column: str, table: str, prof: Profile, *, numeric: bool = F
         return d.set("record_date", 0.85, "hint", "name_hint+date_values")
 
     # 6. names and demographics
-    if hint in ("first_name", "middle_name", "last_name", "full_name", "maiden_name"):
-        cat = "first_name" if hint == "middle_name" else hint
+    if hint in ("first_name", "middle_name", "last_name", "full_name", "maiden_name", "other_names"):
+        # "other names" are resolved per table (resolve_names): middle names, given names or a full name
+        cat = {"middle_name": "first_name", "other_names": "full_name"}.get(hint, hint)
         d.set(cat, 0.9 if r("name") >= 0.6 else 0.5, "hint", "name_hint")
         if hint == "middle_name":
             d.standard_field = "middle_names"
         return d
     if hint == "sex":
-        return d.set("sex", 0.95 if r("sex") >= 0.8 else 0.5, "hint", "name_hint")
+        # letters (M/F, Male/Female) or ISO 5218 digits (1 male, 2 female, 0/9 unknown) behind a sex hint
+        return d.set("sex", 0.95 if r("sex") + r("sex_iso") >= 0.8 else 0.5, "hint", "name_hint")
     if r("sex") >= 0.98 and prof.distinct <= 6 and prof.nonnull >= 20 and hint is None:
         return d.set("sex", 0.7, "values", "sex_codes_without_name_hint")
     if hint == "postal_code":
@@ -175,6 +183,12 @@ def classify_column(column: str, table: str, prof: Profile, *, numeric: bool = F
         return d.set("other", 0.5, "hint", "date_hint_but_values_not_dates")
     if hint == "other_identifier":
         return d.set("other_identifier", 0.6, "hint", "name_hint")
+    if hint == "account_no":
+        if r("bank") >= 0.8:      # flagged conservatively: an account number that looks like a bank account
+            return d.set("bank_account", 0.6, "hint", "account_number_with_bank_like_values")
+        return d.set("other_identifier", 0.6, "hint", "patient_billing_account_number")
+    if hint == "not_result":
+        return d.set("other", 0.6, "hint", "workflow_status_not_a_result")
     if r("digits") >= 0.9 and prof.avg_len >= 6:
         return d.set("other_identifier", 0.5, "values", "numeric_identifier_like")
     return d.set("other", 0.5, "values", "no_rule_matched")
@@ -220,14 +234,28 @@ def apply_override(cs: ColumnState, category: str) -> None:
 
 
 def resolve_names(cols: list[ColumnState]) -> None:
-    """``Names`` + ``Surname`` (common SA form layout): the generic name column holds first names."""
+    """Resolve name columns that depend on their neighbours.
+
+    * ``Names`` + ``Surname`` (common SA form layout): the generic name column holds first names;
+    * ``other_names`` beside a forename and a family-name column holds middle names; beside a family name only it
+      holds the given names; alone it is a full name. A full name is used only without separate first/last columns.
+    """
     has_last = any(c.decision.category == "last_name" for c in cols)
-    has_first = any(c.decision.category == "first_name" for c in cols)
+    has_first = any(c.decision.category == "first_name" and c.decision.standard_field == "first_name"
+                    and c.decision.hint != "other_names" for c in cols)
     for c in cols:
         if c.override or c.decision.category != "full_name":
             continue
+        conf = min(c.decision.confidence, 0.85)
+        if c.decision.hint == "other_names":
+            if has_first and has_last:
+                c.decision.set("first_name", conf, "table", "other_names_beside_first_and_last_name")
+                c.decision.standard_field = "middle_names"
+            elif has_last:
+                c.decision.set("first_name", conf, "table", "other_names_beside_surname_are_given_names")
+            continue
         if has_last and not has_first and c.token in _GENERIC_NAME_TOKENS:
-            c.decision.set("first_name", min(c.decision.confidence, 0.85), "table", "generic_name_column_beside_surname")
+            c.decision.set("first_name", conf, "table", "generic_name_column_beside_surname")
 
 
 def identity_groups(cols: list[ColumnState]) -> set[str]:
