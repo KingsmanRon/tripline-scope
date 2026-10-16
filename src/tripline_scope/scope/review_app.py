@@ -201,7 +201,7 @@ def serve(case, store, home, *, port: int = 8765) -> None:
     import uvicorn
 
     app = create_app(case, store, home, port=port)
-    print(f"review page: http://{BIND_HOST}:{port}/  (Ctrl+C to stop)")
+    print(f"review page: http://{BIND_HOST}:{port}/  (Ctrl+C to stop)", flush=True)
     uvicorn.Server(uvicorn.Config(app, host=BIND_HOST, port=int(port), log_level="warning", access_log=False,
                                   server_header=False)).run()
 
