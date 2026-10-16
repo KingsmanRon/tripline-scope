@@ -376,7 +376,9 @@ def _classify_one(toks: list[_Tok]) -> SqlInfo:
     elif verb in ("alter", "drop", "create"):
         objs_kw = words[1:4]
         if "audit" in objs_kw:
-            op = f"{verb}_audit"
+            scope = "database" if "database" in objs_kw else "server"
+            spec = "_specification" if "specification" in words[1:5] else ""
+            op = f"{verb}_{scope}_audit{spec}"
             if verb == "drop":
                 obs = "auditing_disabled"
             else:

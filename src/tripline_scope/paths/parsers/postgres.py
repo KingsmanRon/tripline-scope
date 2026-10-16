@@ -28,7 +28,7 @@ CSV_COLUMNS = ["log_time", "user_name", "database_name", "process_id", "connecti
                "backend_type", "leader_pid", "query_id"]
 
 _PREFIX_ESCAPES = {
-    "a": r"(?P<app>.*?)", "u": r"(?P<user>[^\s@\[\]]*?)", "d": r"(?P<db>[^\s@\[\]]*?)",
+    "a": r"(?P<app>.*?)", "u": r"(?P<user>\[unknown\]|[^\s@\[\]]*?)", "d": r"(?P<db>\[unknown\]|[^\s@\[\]]*?)",
     "r": r"(?P<remote>[^\s\[\]]*?)", "h": r"(?P<remote>[^\s\[\]]*?)", "b": r"(?P<backend>[^\[\]]*?)",
     "p": r"(?P<pid>\d+)", "P": r"(?P<leader>\d*)", "t": r"(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?: [A-Za-z+\-0-9:]+)?)",
     "m": r"(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+(?: [A-Za-z+\-0-9:]+)?)", "n": r"(?P<epoch>\d+\.\d+)",
