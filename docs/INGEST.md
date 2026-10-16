@@ -225,26 +225,28 @@ null_rate, sample_match_rate, sample_null_rate, purpose, exposure_category, stan
 | Category | Evidence | Extracted as |
 |---|---|---|
 | `sa_id` | 13 digits, real YYMMDD (either century), citizenship digit 0/1/2, Luhn. Name hint + >= 10 % valid, or >= 90 % valid without a hint (confidence 0.85). Numeric columns (and hinted ones) are padded back to 13 digits. | `sa_id` (valid only) |
-| `passport` | name hint (+ letters-and-digits format); passport-like values in an ID column | `passport_no` |
-| `phone` | hint, or >= 90 % SA-formatted numbers without a hint | `phone`, `phone_alt` (E.164) |
+| `passport` | name hint (`passport`, `travel_doc`, `foreign_id`) + letters-and-digits format; passport-like values in an ID column (only when there is no passport column) | `passport_no` |
+| `phone` | hint (`cell`, `mobile`, `tel`, `contact_no`, a bare `contact` decided by values), or >= 90 % SA-formatted numbers without a hint | `phone`; a second phone column -> `phone_alt` (E.164) |
 | `email` | >= 80 % well-formed addresses, or hint | `email` (lower case) |
-| `first_name`, `last_name`, `full_name`, `maiden_name` | name hints (`Names` beside `Surname` = first names; `middle_name` -> `middle_names`) | upper-case ASCII; `full_name` alone is split (handles `SURNAME, Given`) |
+| `first_name`, `last_name`, `full_name`, `maiden_name` | name hints (`Names` beside `Surname` = first names; `middle_name` -> `middle_names`; `other_names` beside forename + family name -> `middle_names`, beside a surname only -> given names) | upper-case ASCII; `full_name` is used only without separate first/last columns and is then split (handles `SURNAME, Given`) |
 | `dob`, `record_date` | name hint + date values (format chosen per column: ISO, day-first, compact, `5 Jan 1980`, month-first) | DATE |
-| `sex`, `language`, `address`, `postal_code` | hints (address parts are joined in column order) | normalised text |
+| `sex`, `language`, `address`, `postal_code` | hints (`postal`, `zip`, `post_code`; address parts are joined in column order). Sex: `M`/`F`, `Male`/`Female`, or ISO 5218 digits behind a sex hint (1 male, 2 female, 0/9 unknown); never inferred from the ID number here | `sex` as `M`/`F`/`U`; other text normalised |
 | `medical_aid_no`, `medical_aid_scheme` | hints (`med_aid_no`, `member_no`, `scheme`, ...) + format | number extracted; scheme flagged only |
 | `patient_key`, `patient_ref` | hints (`patient_id`, `folder_no`, `mrn`, `pat_no`, ...) or the identity table's unique key; references are kept only when their values match a patient key of the source | `local_patient_key`, `patient_ref` |
-| `guardian_*` | next-of-kin / parent / guarantor hints | `guardian_*` |
+| `guardian_*` | guardian context (`guardian`, `parent`, `mother`, `father`, `nok`, `next_of_kin`, `kin`, `caregiver`, `guarantor`) before or after a phone/contact, name, ID or e-mail word (`nok_contact`, `parent_contact`, `cell_mother`) | `guardian_*` |
 | `icd10` | hint + ICD-10 pattern, or >= 90 % ICD-10 codes that repeat (diagnosis text with a hint also counts) | flag `_has_clinical_diagnosis` only |
 | `test_code`, `test_result` | hints (`test_code`, `loinc`, `result`, `value` in result/lab tables) | flags only |
 | `clinical_free_text` | hints (`notes`, `comments`, `history`, ...), or free text without a hint (confidence 0.5, "possibly clinical") | flag only |
 | `card_number` | card prefix + Luhn + 13–19 digits on >= 80 % of values, or a card hint | flag only — **never copied** |
-| `bank_account` | bank hints (`bank_acc_no`, `iban`, `branch_code`) — a plain `account_no` is a patient billing account | flag only — **never copied** |
+| `bank_account` | bank hints (`bank_acc_no`, `iban`, `branch_code`, `debit_account`); a plain `account_no` is a patient billing account unless >= 80 % of its values look like bank account numbers (then flagged, confidence 0.6) | flag only — **never copied** |
 | `other_identifier`, `other` | everything else | not extracted |
 
 Context against false positives: arbitrary 13-digit numbers, Luhn-valid numbers without context and random
 16-digit numbers do not become IDs or cards; value-only rules never override a contrary name hint; names ending
 in `_id`/`_no`/`_key` are keys, not clinical content. The full scan **demotes** a sample decision whose
 confirmed match rate falls below the threshold (e.g. a value-only `sa_id` below 80 %); the reason is recorded.
+
+**One column per standard field.** Columns never fill each other's gaps: the best column for a field (confidence, then a primary-looking name, then column order) takes it, a second phone column takes `phone_alt`, and any further column of the same kind keeps its category but gets `standard_field: null` with the reason `no_free_standard_field_slot_for_<field>` (it still sets exposure flags). Address parts are the one exception: they are joined into one address.
 
 **Tables.** An *identity* table has at least two of name, date of birth, SA ID and passport. Its `patient_key`
 is the hinted (or `id`/primary-key) column that is unique and non-null. Other tables' key-like columns become
@@ -336,6 +338,9 @@ python demo/lab-breach/build_baks.py --synth DIR --out DIR --host 127.0.0.1 --po
 ```
 
 Synthetic data and Developer Edition only.
+
+Discovery is regression-tested against the five column-naming styles (A–E) of the synthetic lab estate
+(`tests/ingest/test_synth_styles.py`).
 
 ## 12. Known limitations
 
