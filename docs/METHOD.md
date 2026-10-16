@@ -184,6 +184,12 @@ hardware and timings, are in `bench/results/`.
 |---|---|---|---|---|---|---|
 | 100 000 | 99.985 % | 99.989 % | 99.945 % | 0.06 % | 0.15 % | 2.6 % |
 | 1 000 000 | 99.961 % | 99.965 % | 99.837 % | 0.11 % | 0.34 % | 2.6 % |
+| 10 000 000 | 99.874 % | 99.905 % | 99.619 % | 0.24 % | **0.89 %** | 2.4 % |
+
+At 10 million rows the review band (0.89 % of people, 9 549 pairs) is above the 0.5 % target. The number of
+borderline pairs grows faster than the data, because large estates contain more different people who share a
+common surname sound and date of birth; about 70 % of these pairs are true matches. Linking them automatically
+would lower precision, so they are left for a reviewer — the review effort, not the accuracy, is what grows.
 
 Targets: auto-link precision ≥ 99.5 %, person-count error ≤ 1 %, review band ≤ 0.5 % of people, estimate within
 5 % of the final count. Real data can differ from synthetic data; the review band and the guards are there to
