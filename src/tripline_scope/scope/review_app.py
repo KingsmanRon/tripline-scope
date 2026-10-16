@@ -17,6 +17,10 @@ import html
 import secrets
 import time
 
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+
 from tripline_scope.core.auth import identity_provider
 from tripline_scope.core.errors import TriplineError
 from tripline_scope.core.redact import mask
@@ -90,10 +94,6 @@ class ReviewState:
 
 
 def create_app(case, store, home, *, state: ReviewState | None = None, port: int = 8765):
-    from fastapi import FastAPI, Form, Request
-    from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-    from starlette.middleware.trustedhost import TrustedHostMiddleware
-
     st = state or ReviewState(case, store, home)
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=[BIND_HOST, "localhost"])
