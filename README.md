@@ -1,4 +1,4 @@
-# Tripline Scope: operator runbook (draft)
+# Tripline Scope: operator runbook
 
 Tripline Scope helps a South African hospital or pathology laboratory answer the POPIA section 22 questions
 after a suspected breach. Whose personal information was exposed, which records, through which access
@@ -9,9 +9,8 @@ produces signed, versioned reports in open formats (JSON, CSV, Parquet, PDF). An
 reports offline with the stand-alone `tscope-verify` tool. A trained hospital team runs cases without the
 vendor.
 
-> **Draft.** Commands marked *(module)* belong to the scoping modules and are listed with their names
-> from the build plan. Check exact flags with `tscope <command> --help` on your installed version. Each
-> section ends with what has been demonstrated and what has not.
+> Every command below has been run end to end on synthetic data (see `docs/ACCEPTANCE.md`). Check flags with
+> `tscope <command> --help`. Each section says what has been demonstrated and what has not.
 
 ## 1. Ground rules
 
@@ -144,31 +143,56 @@ tscope source verify --case /cases/CASE-2026-014 --full      # re-hash every sou
 tscope case gap --case /cases/CASE-2026-014 --description "firewall logs before 3 Sep rotated"
 ```
 
-**Incident case:**
+**Restore target.** Before the first ingest, the head of IT configures the hospital's licensed restore server
+(SQL Server) and/or the local PostgreSQL 16 under `restore_targets` in the installation config; passwords are
+read from an environment variable named there, never stored. See `docs/INGEST.md`.
 
-1. `case init`
-2. `source add`
-3. `tscope ingest` *(module)*: restore `.bak` files to the hospital's licensed SQL Server, or PostgreSQL
-   dumps to the local PostgreSQL 16; classify columns; extract to encrypted Parquet.
-4. `tscope paths ingest` / `tscope paths analyse` *(module)*, if logs were supplied: access paths and scope
-   candidates.
-5. `tscope estimate` *(module)*: preliminary counts, then
-   `tscope release --kind scope --approver ines` to release the preliminary report.
-6. `tscope scope match` / `tscope scope review` *(module)*: link records into people; reviewers decide the
-   uncertain pairs.
-7. `tscope scope report` *(module)*, then `tscope release --kind scope --approver ines`.
-8. `tscope notify export` *(module)*: the approver exports the notification pack, only after release.
-9. `tscope case close`.
+**Incident case** (operator `olivia`, reviewer `rami`, approver/Information Officer `ines`):
+
+```
+tscope case init /cases/C --case-id CASE-2026-014 --incident-start 2026-09-01T00:00:00Z \
+    --incident-end 2026-09-14T23:59:59Z --operator olivia --reviewer rami --approver ines
+tscope source add --case /cases/C --kind mssql_bak --path /sources/LabDB03.bak ...      # one per backup
+tscope source add --case /cases/C --kind csv --path leak.csv --evidence-role leak_sample --copy ...
+# access-path analysis, if logs were supplied (optional; scope still works without it)
+tscope paths ingest --case /cases/C --manifest logs.yaml
+tscope paths analyse --case /cases/C --window 2026-09-01T00:00:00Z/2026-09-14T23:59:59Z
+tscope paths report --case /cases/C [--exposure-report <released exposure report>]
+tscope paths scope-candidates --case /cases/C --out candidates.json
+tscope ingest --case /cases/C                       # restore, classify columns, extract needed columns (encrypted)
+tscope scope constrain --case /cases/C --candidates candidates.json --reason "..."   # never narrows the proposal
+tscope estimate --case /cases/C                     # preliminary count with bounds
+tscope release --case /cases/C --kind scope --approver ines        # first Regulator filing
+tscope scope match --case /cases/C                  # deterministic + Fellegi-Sunter linkage, clustering
+tscope scope review --case /cases/C                 # reviewer: keyboard review page on 127.0.0.1 (or: scope decide --file)
+tscope scope match --case /cases/C                  # replays review decisions
+tscope scope report --case /cases/C                 # draft: JSON + PDF + diff.json
+tscope scope notify build --case /cases/C           # encrypted notification pack
+tscope release --case /cases/C --kind scope --approver ines        # refined, signed version 2
+tscope scope notify export --case /cases/C --out /secure/export --approver ines
+tscope verify --case /cases/C
+tscope case close --case /cases/C --approver ines --external-backup "..."
+```
 
 **Readiness case:**
 
-1. `case init --mode readiness`
-2. `tscope map` *(module)*
-3. `tscope profile` *(module)*
-4. `tscope exposure scan` *(module)*
-5. `tscope exposure report` *(module)*
-6. `tscope drill` *(module)*
-7. `tscope release --kind exposure|readiness|datamap|drill`
+```
+tscope case init /cases/R --case-id READY-2026-Q4 --mode readiness --operator ... --approver ...
+tscope source add ... ; tscope ingest --case /cases/R   # read-only copies
+tscope map --case /cases/R                          # data map: where ID/contact/medical-aid/payment/clinical columns live
+tscope profile save --case /cases/R --name hospital # tuned matching configuration, no patient data
+tscope exposure scan --case /cases/R --inputs manifest.yaml
+tscope exposure report --case /cases/R              # ranked findings, coverage, missing evidence
+tscope exposure diff --from <old report> --to <new report>
+tscope drill --case /cases/R                        # synthetic incident shaped like the mapped schema, timed
+tscope release --case /cases/R --kind datamap|exposure|drill --approver ...
+tscope readiness report --case /cases/R && tscope release --case /cases/R --kind readiness --approver ...
+```
+
+**Demo:** `demo/lab-breach/run.sh` (synthetic data, SQL Server Developer for the demo only) runs the whole
+incident flow above in about two minutes at 100k rows and ends with a leak scan and a source-checksum check.
+`scripts/run_airgapped.sh` runs any command, including the demo, in a network namespace that can reach only
+the local Docker bridge.
 
 `tscope reports --case DIR` lists drafts and released versions. `tscope verify --case DIR` checks every
 released chain, the audit log and any destruction certificate with the installation's pinned keys.
