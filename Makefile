@@ -33,7 +33,7 @@ test:                       ## unit, packaging and acceptance tests (Docker-mark
 	$(PYTHON) -m pytest $(PYTEST_ARGS)
 
 test-offline:               ## the same tests inside an empty network namespace (root + unshare)
-	scripts/run_offline.sh $(PYTHON) -m pytest $(PYTEST_ARGS)
+	TSCOPE_OFFLINE_LOOPBACK=1 scripts/run_offline.sh $(PYTHON) -m pytest $(PYTEST_ARGS)
 
 wheelhouse:                 ## runtime wheels for CPython 3.12 / manylinux x86_64, verified against the lock
 	UV=$(UV) scripts/fetch_wheels.sh requirements/runtime.txt $(WHEELHOUSE)
