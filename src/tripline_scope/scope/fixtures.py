@@ -237,6 +237,38 @@ def _write_table(con, store, sid, slug, src_sql, exprs, dbname, table_name, role
             "fields": sorted(present), "flags": sorted(flags)}
 
 
+def write_rows_as_extract(store, sid: str, tables: list[dict]) -> dict:
+    """Write hand-made rows (lists of standard-field dicts) as an extract; for tests and drills.
+
+    ``tables``: ``[{"database", "table", "role", "rows": [...], "links_to": [slug...]}]``."""
+    schema = standard_schema()
+    entries = []
+    for t in tables:
+        slug = slugify(t["table"])
+        cols = {f: [] for f in schema.names}
+        present, flags = set(), set()
+        for i, r in enumerate(t["rows"]):
+            for f in schema.names:
+                if f == "_row_key":
+                    v = f"{sid}|{slug}|{i}"
+                elif f == "_source_id":
+                    v = sid
+                elif f == "_table":
+                    v = slug
+                else:
+                    v = r.get(f)
+                    if v is not None:
+                        (flags if f.startswith("_has_") else present).add(f)
+                cols[f].append(v)
+        tb = pa.table({f: pa.array(cols[f], type=schema.field(f).type) for f in schema.names}, schema=schema)
+        store.write_table(f"work/extract/{sid}/{slug}/part-00000.parquet", tb)
+        entries.append({"database": t["database"], "table": t["table"], "slug": slug, "row_count": tb.num_rows,
+                        "parts": ["part-00000.parquet"], "role": t["role"], "fields": sorted(present),
+                        "flags": sorted(flags), "links_to": t.get("links_to") or [],
+                        "key": "local_patient_key" if t["role"] == "identity" else None})
+    return _write_manifest(store, sid, entries)
+
+
 def _write_manifest(store, sid: str, entries: list[dict]) -> dict:
     doc = {"schema": MANIFEST_SCHEMA, "source_id": sid, "tables": entries,
            "column_categories": {e["slug"]: {f: FIELD_CATEGORY.get(f, f) for f in e["fields"]} for e in entries}}

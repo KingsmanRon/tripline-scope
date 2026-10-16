@@ -303,11 +303,11 @@ class Generator:
                     raise RuntimeError("synthetic population exhausted before reaching the row target")
                 hi = min(lo + self.chunk, p_max)
                 produced = self._chunk(con, lo, hi, produced, writers, counters, seqs, stats, orphans_by_db, leak_rows)
-                gt = con.execute("SELECT * FROM gt ORDER BY source_db, local_patient_key").fetch_arrow_table()
+                gt = con.execute("SELECT * FROM gt ORDER BY source_db, local_patient_key").to_arrow_table()
                 if gt_writer is None:
                     gt_writer = pq.ParquetWriter(self.out / "ground_truth.parquet", gt.schema, compression="zstd")
                 gt_writer.write_table(gt)
-                ids = con.execute(IDENTIFIERS_SQL).fetch_arrow_table()
+                ids = con.execute(IDENTIFIERS_SQL).to_arrow_table()
                 if id_writer is None:
                     id_writer = pq.ParquetWriter(self.out / "ground_truth_identifiers.parquet", ids.schema,
                                                  compression="zstd")

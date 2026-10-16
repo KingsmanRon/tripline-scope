@@ -36,7 +36,11 @@ PERSON_ROWS = "work/scope/person_rows.parquet"
 
 
 def extract_hashes(store, data: D.ScopeData) -> dict[str, str]:
-    return {sid: store.file_sha256(f"work/extract/{sid}/manifest.json") for sid in sorted(data.sources)}
+    """SHA-256 of each source's canonical extract manifest (plaintext, so identical inputs give identical hashes
+    across cases; the encrypted file's own hash differs per case key and nonce)."""
+    from tripline_scope.core.canonical import canonical_bytes, sha256_hex
+
+    return {sid: sha256_hex(canonical_bytes(data.sources[sid]["manifest"])) for sid in sorted(data.sources)}
 
 
 def _tables_json(con) -> list[dict]:
@@ -102,12 +106,12 @@ def run_match(case, store, cfg: dict, *, threads=None, reference_date: dt.date |
     store.write_table(PEOPLE, con.execute("""
         SELECT p.person_key, p.confidence, p.n_rows, p.n_sources, p.age_known, p.is_minor, p.own_contact,
                p.guardian_contact, p.segment, p.language, p.in_leak, p.leak_mask, coalesce(k.cat_mask, 0) AS cat_mask
-        FROM people p LEFT JOIN people_mask k USING (person_key) ORDER BY p.person_key""").fetch_arrow_table())
+        FROM people p LEFT JOIN people_mask k USING (person_key) ORDER BY p.person_key""").to_arrow_table())
     store.write_table(PERSON_TABLES, con.execute("""
         SELECT pt.person_key, t.source_id, t.slug, pt.n_rows, pt.min_date, pt.n_null_date, pt.cat_mask
-        FROM person_tables pt JOIN src_tables t USING (t_idx) ORDER BY pt.person_key, t.source_id, t.slug""").fetch_arrow_table())
+        FROM person_tables pt JOIN src_tables t USING (t_idx) ORDER BY pt.person_key, t.source_id, t.slug""").to_arrow_table())
     store.write_table(PERSON_ROWS, con.execute("""
-        SELECT i.row_key, pr.person_key FROM person_rows pr JOIN ident i USING (row_id) ORDER BY i.row_key""").fetch_arrow_table())
+        SELECT i.row_key, pr.person_key FROM person_rows pr JOIN ident i USING (row_id) ORDER BY i.row_key""").to_arrow_table())
     tables = _tables_json(con)
     store.write_json(TABLES, {"tables": tables})
     store.write_json(DEC.QUEUE, {"items": queue})

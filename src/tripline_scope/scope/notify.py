@@ -156,7 +156,7 @@ def build(case, store, cfg: dict, *, threads=None) -> dict:
         FROM in_scope s JOIN people_p p USING (person_key) JOIN refs f USING (person_key)
         LEFT JOIN name n USING (person_key) LEFT JOIN ph USING (person_key) LEFT JOIN em USING (person_key)
         LEFT JOIN ad USING (person_key) LEFT JOIN gd USING (person_key)
-        ORDER BY p.segment, f.person_ref""".replace("title_case_name(", "_tc(")).fetch_arrow_table()
+        ORDER BY p.segment, f.person_ref""".replace("title_case_name(", "_tc(")).to_arrow_table()
     finally:
         con.close()
     cats = [";".join(c for c in EXPOSURE_CATEGORIES if m & CAT_BIT[c]) for m in tbl.column("cat_mask").to_pylist()]
