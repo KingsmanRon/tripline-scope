@@ -39,7 +39,7 @@ DEFAULT_BUDGET = {
     "archive_max_ratio": 100,
     "archive_max_total_bytes": 256 << 20,
     "max_rows_per_file": 1_000_000,
-    "max_rows_inspected": 200_000,
+    "max_rows_inspected": 50_000,
 }
 _UNITS = {"": 1, "b": 1, "kb": 1000, "kib": 1 << 10, "mb": 1000**2, "mib": 1 << 20, "gb": 1000**3, "gib": 1 << 30,
           "tb": 1000**4, "tib": 1 << 40}

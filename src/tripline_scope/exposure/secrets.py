@@ -218,61 +218,62 @@ class _Rule:
     validator: object = None
     context: re.Pattern | None = None   # must occur on the same line
     title: str | None = None
+    anchors: tuple[str, ...] = ()       # lower-case literals one of which must occur in the text (fast gate)
 
 
 _RULES = [
     _Rule("A1.aws-secret-key", "cloud-key",
           re.compile(r"(?i)aws_?secret_?access_?key[\"']?\s*[:=]\s*[\"']?([A-Za-z0-9/+=]{40})(?![A-Za-z0-9/+=])"),
-          1, 0.95, 90, title="AWS secret access key in plaintext"),
+          1, 0.95, 90, title="AWS secret access key in plaintext", anchors=("secret",)),
     _Rule("A1.aws-access-key-id", "cloud-key-id", re.compile(r"(?<![A-Z0-9])((?:AKIA|ASIA)[A-Z2-7]{16})(?![A-Z0-9])"),
-          1, 0.9, 80, title="AWS access key identifier in plaintext"),
+          1, 0.9, 80, title="AWS access key identifier in plaintext", anchors=("akia", "asia")),
     _Rule("A1.azure-storage-key", "cloud-key", re.compile(r"(?i)AccountKey=([A-Za-z0-9+/]{86}==)"), 1, 0.95, 90,
-          title="Azure storage account key in plaintext"),
+          title="Azure storage account key in plaintext", anchors=("accountkey=",)),
     _Rule("A1.azure-sas-signature", "cloud-key", re.compile(r"[?&;]sig=([A-Za-z0-9%+/=]{40,120})"), 1, 0.8, 85,
-          context=re.compile(r"[?&;]sv=\d{4}-\d{2}-\d{2}"), title="Azure shared access signature in plaintext"),
+          context=re.compile(r"[?&;]sv=\d{4}-\d{2}-\d{2}"), title="Azure shared access signature in plaintext", anchors=("sig=",)),
     _Rule("A1.github-token", "api-token",
           re.compile(r"(?<![A-Za-z0-9_])(gh[pousr]_[A-Za-z0-9]{36,251}|github_pat_[A-Za-z0-9_]{50,251})(?![A-Za-z0-9_])"),
-          1, 0.95, 90, title="GitHub access token in plaintext"),
+          1, 0.95, 90, title="GitHub access token in plaintext", anchors=("gh", "github_pat_")),
     _Rule("A1.slack-token", "api-token", re.compile(r"(?<![A-Za-z0-9])(xox[abposr]-[A-Za-z0-9-]{10,200})"), 1, 0.9, 90,
-          title="Slack token in plaintext"),
+          title="Slack token in plaintext", anchors=("xox",)),
     _Rule("A1.slack-webhook", "api-token",
           re.compile(r"https://hooks\.slack\.com/services/(T[A-Z0-9]{6,}/B[A-Z0-9]{6,}/[A-Za-z0-9]{20,})"), 1, 0.9, 90,
-          title="Slack incoming-webhook URL in plaintext"),
+          title="Slack incoming-webhook URL in plaintext", anchors=("hooks.slack.com",)),
     _Rule("A1.stripe-key", "api-token",
           re.compile(r"(?<![A-Za-z0-9_])((?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,99})(?![A-Za-z0-9])"), 1, 0.95, 90,
-          title="Stripe secret key in plaintext"),
+          title="Stripe secret key in plaintext", anchors=("sk_", "rk_")),
     _Rule("A1.google-api-key", "api-token",
           re.compile(r"(?<![A-Za-z0-9_\-])(AIza[0-9A-Za-z_\-]{35})(?![A-Za-z0-9_\-])"), 1, 0.9, 90,
-          title="Google API key in plaintext"),
+          title="Google API key in plaintext", anchors=("aiza",)),
     _Rule("A1.sendgrid-key", "api-token",
           re.compile(r"(?<![A-Za-z0-9])(SG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43})(?![A-Za-z0-9_\-])"), 1, 0.95, 90,
-          title="SendGrid API key in plaintext"),
+          title="SendGrid API key in plaintext", anchors=("sg.",)),
     _Rule("A1.jwt", "session-token",
           re.compile(r"(?<![A-Za-z0-9_\-])(eyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{16,})"), 1, 0.8,
-          70, validator=_jwt_ok, title="Hard-coded JSON Web Token"),
+          70, validator=_jwt_ok, title="Hard-coded JSON Web Token", anchors=("eyj",)),
     _Rule("A1.aspnet-machine-key", "signing-key",
           re.compile(r"(?i)\b(?:validationKey|decryptionKey)\s*=\s*\"([0-9A-Fa-f]{32,256})\""), 1, 0.95, 90,
-          title="ASP.NET machine key (validation/decryption) in plaintext"),
+          title="ASP.NET machine key (validation/decryption) in plaintext", anchors=("validationkey", "decryptionkey")),
     _Rule("A1.basic-auth-header", "password", re.compile(r"(?i)\bbasic\s+([A-Za-z0-9+/]{8,}={0,2})(?![A-Za-z0-9+/=])"),
           1, 0.85, 75, validator=_b64_basic_ok, context=re.compile(r"(?i)authori[sz]ation"),
-          title="HTTP Basic credentials in plaintext"),
+          title="HTTP Basic credentials in plaintext", anchors=("basic",)),
     _Rule("A1.bearer-token", "session-token", re.compile(r"(?i)\bbearer\s+([A-Za-z0-9._\-~+/]{24,}=*)"), 1, 0.75, 60,
           validator=lambda v: entropy(v) >= 3.5, context=re.compile(r"(?i)authori[sz]ation"),
-          title="Hard-coded bearer token"),
+          title="Hard-coded bearer token", anchors=("bearer",)),
     _Rule("A1.htpasswd-hash", "password-hash",
           re.compile(r"(?m)^[A-Za-z0-9._@\-]{1,64}:(\$apr1\$[./A-Za-z0-9]{1,8}\$[./A-Za-z0-9]{22}|"
                      r"\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}|\{SHA\}[A-Za-z0-9+/]{27}=)[ \t]*\r?$"), 1, 0.9, 80,
-          title="Password hash stored with web-server files"),
+          title="Password hash stored with web-server files", anchors=("$apr1$", "$2", "{sha}")),
     _Rule("A1.cli-password", "password",
           re.compile(r"(?i)\b(?:sqlcmd|bcp|osql|mysql|mysqldump|psql|mongo|mongosh|mongodump|pg_dump)\b[^\n]{0,300}?"
                      r"(?:\s-P\s*|\s--password[= ])(['\"]?)([^\s'\"]{3,128})\1"), 2, 0.85, 85,
-          title="Password passed on a command line in a script"),
+          title="Password passed on a command line in a script", anchors=("sqlcmd", "bcp", "osql", "mysql", "psql", "mongo", "pg_dump")),
     _Rule("A1.powershell-plaintext", "password",
           re.compile(r"(?i)ConvertTo-SecureString\s+(?:-String\s+)?([\"'])([^\"'\r\n]{3,200})\1\s+-AsPlainText"), 2,
-          0.9, 85, title="Plaintext password converted to a SecureString in a script"),
+          0.9, 85, title="Plaintext password converted to a SecureString in a script", anchors=("convertto-securestring",)),
     _Rule("A1.net-use-password", "password",
           re.compile(r"(?i)\bnet\s+use\s+\\\\[^\s]+\s+([\"']?)([^\s\"'/]{3,128})\1\s+/user:"), 2, 0.85, 85,
-          title="Plaintext password in a 'net use' command"),
+          title="Plaintext password in a 'net use' command", anchors=("net use",)),
 ]
 _PEM = re.compile(r"-----BEGIN ((?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?)-----")
 _URL = re.compile(r"(?i)\b([a-z][a-z0-9+.\-]{1,24})://([^\s:/@'\"<>(){}\[\]]{1,128}):([^\s/@'\"<>(){}\[\]]{1,256})@"
@@ -347,7 +348,7 @@ def detect(text: str, rel: str) -> list[Candidate]:
     out: list[Candidate] = []
 
     # --- private keys
-    for m in _PEM.finditer(text):
+    for m in (_PEM.finditer(text) if "-----BEGIN" in text else ()):
         label = m.group(1)
         end_m = re.compile(r"-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----").search(text, m.end(), min(n, m.end() + 20000))
         body_end = end_m.start() if end_m else min(n, m.end() + 4000)
@@ -361,8 +362,11 @@ def detect(text: str, rel: str) -> list[Candidate]:
             c.suppressed = "placeholder"
         out.append(c)
 
-    # --- provider and structural rules
+    # --- provider and structural rules (each gated on a cheap literal anchor)
+    low = text.lower()
     for r in _RULES:
+        if r.anchors and not any(x in low for x in r.anchors):
+            continue
         for m in r.rx.finditer(text):
             v = m.group(r.group)
             s, e = m.start(r.group), m.end(r.group)
@@ -387,7 +391,7 @@ def detect(text: str, rel: str) -> list[Candidate]:
             out.append(c)
 
     # --- credentials in URLs
-    for m in _URL.finditer(text):
+    for m in (_URL.finditer(text) if "://" in text else ()):
         scheme, user, pw, host = m.group(1).lower(), m.group(2), m.group(3), m.group(4)
         path = (m.group(6) or "").strip("/")
         fam = "db-credential" if scheme.split(":")[0] in _DB_SCHEMES or scheme.startswith("jdbc") else "password"
@@ -400,7 +404,7 @@ def detect(text: str, rel: str) -> list[Candidate]:
         out.append(c)
 
     # --- PHP define('DB_PASSWORD', '...')
-    for m in _PHP_DEFINE.finditer(text):
+    for m in (_PHP_DEFINE.finditer(text) if "define" in low else ()):
         fam = key_family(m.group(1))
         if not fam:
             continue
