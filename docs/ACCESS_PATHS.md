@@ -558,7 +558,11 @@ guarantees.
 | run (4 vCPU shared, Python 3.12) | events | ingest | ev/s | ingest peak RSS | analyse | report | work disk |
 |---|---|---|---|---|---|---|---|
 | 100k | 99,343 | 8.2 s | ≈12,000 | 164 MB | 10.0 s | 12.9 s | 26 MB / 33 files |
-| 1M | see the final measurement in `bench1m.json` (recorded in the integration notes) | | | | | | |
+| 1M | 988,010 (219 MB of logs, 37 files) | 73 s | ≈13,500 | 993 MB | 364 s (peak RSS 4.1 GB) | 46 s | 496 MB / 33 files |
+
+Both runs had 0 parser failures; scope-candidates took 28 s at 1M. The 1M analysis is dominated by the
+≈750,000 edges of routine application traffic (portal request ids, service logons), all of which are kept in
+`analysis.json`. Summarising routine routes' edges is the next optimisation if hospitals bring larger volumes.
 
 ## 12. Licensing (EVTX parser)
 
