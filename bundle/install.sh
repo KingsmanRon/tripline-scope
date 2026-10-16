@@ -101,8 +101,10 @@ install_venv() {
     PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 "$prefix/venv/bin/python" -m pip install --quiet \
         --no-index --no-cache-dir --require-hashes --find-links "$BUNDLE/wheels" -r "$BUNDLE/requirements.txt"
     sh "$BUNDLE/prune.sh" "$prefix/venv/bin/python" "$BUNDLE/prune.list"
-    # The environment file disables any OpenTelemetry SDK that could ever be present (none is installed).
+    # Environment for the service account (source it: set -a; . tripline.env; set +a). It also disables any
+    # OpenTelemetry SDK that could ever be present (none is installed).
     cat > "$prefix/tripline.env" <<'EOF'
+TSCOPE_HOME=/var/lib/tripline
 OTEL_SDK_DISABLED=true
 OTEL_TRACES_EXPORTER=none
 OTEL_METRICS_EXPORTER=none
