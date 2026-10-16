@@ -34,7 +34,7 @@ def build_case(base: Path, syn: Path, *, analyse: bool = True) -> SimpleNamespac
             assert rc == 0, err
             analysis = read_json(case_dir, "work/paths/analysis.json")
         return SimpleNamespace(env=env, case_dir=case_dir, ingest=ingest, analysis=analysis, syn=syn,
-                               truth=json.loads((syn / "ground_truth.json").read_text()))
+                               truth=json.loads((syn / "ground_truth.json").read_text()) if (syn / "ground_truth.json").exists() else {})
     finally:
         _clear()
         os.environ.update(saved)

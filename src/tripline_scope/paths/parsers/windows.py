@@ -3,6 +3,9 @@
 export script in ``docs/ACCESS_PATHS.md`` (``TimeCreated`` in round-trip ISO format, ``EventID``, ``Computer``,
 ``RecordId`` and one column per ``EventData`` name).
 
+EVTX chunk/record checksums are validated by default (damaged chunks are counted as parse failures); set
+``options.validate_checksums: false`` to recover records from damaged chunks, which is then noted.
+
 Mapped events: 4624/4625 logon success/failure, 4634/4647 logoff, 4648 explicit credentials, 4672 special
 privileges, 4688 process start (executable name only -- command lines are never read), 4663 object access
 (file paths reduced to extension + keyed fingerprint), 5140/5145 share access, 4720/4722/4724/4725/4726/4738
@@ -141,13 +144,28 @@ def _evtx_events(ctx: ParseContext, stream, relname: str):
     from evtx import PyEvtxParser
 
     data = stream.read()
-    parser = PyEvtxParser(io.BytesIO(data), number_of_threads=1)
-    n = 0
-    for item in parser.records_json():
+    validate = ctx.options.get("validate_checksums", True)
+    if not validate:
+        ctx.notes.add("evtx_checksums_not_validated")
+    parser = PyEvtxParser(io.BytesIO(data), number_of_threads=1, validate_checksums=bool(validate))
+    n, errors_in_row = 0, 0
+    it = parser.records_json()
+    while True:
+        try:
+            item = next(it)
+        except StopIteration:
+            break
+        except RuntimeError:
+            item = RuntimeError("unreadable")
         n += 1
         if isinstance(item, Exception):
-            ctx.fail(f"{relname}#record{n}", "EVTX record could not be parsed")
+            ctx.fail(f"{relname}#record{n}", "EVTX record or chunk could not be read (checksum or structure)")
+            errors_in_row += 1
+            if errors_in_row > 10_000:
+                ctx.fail(relname, "too many consecutive EVTX errors; rest of file not read")
+                break
             continue
+        errors_in_row = 0
         try:
             doc = json.loads(item["data"])
         except (TypeError, ValueError, KeyError):
