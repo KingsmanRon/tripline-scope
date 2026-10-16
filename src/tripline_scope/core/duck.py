@@ -35,6 +35,7 @@ def connect(
             "autoinstall_known_extensions": False,
             "autoload_known_extensions": False,
             "allow_community_extensions": False,
+            "enable_progress_bar": False,
             "temp_directory": spill_dir if (spill_dir and spill_dir_encrypted) else "",
         },
     )
