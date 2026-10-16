@@ -188,14 +188,13 @@ hardware and timings, are in `bench/results/`.
 
 | Synthetic admission rows | Auto-link precision (pairs) | Pairwise precision | Pairwise recall | Person-count error | Review band (share of people) | Preliminary estimate vs final |
 |---|---|---|---|---|---|---|
-| 100 000 | 99.985 % | 99.989 % | 99.945 % | 0.06 % | 0.15 % | 2.6 % |
-| 1 000 000 | 99.961 % | 99.965 % | 99.837 % | 0.11 % | 0.34 % | 2.6 % |
-| 10 000 000 | 99.874 % | 99.905 % | 99.619 % | 0.24 % | **0.89 %** | 2.4 % |
+| 100 000 | 99.916 % | 99.923 % | 99.891 % | 0.09 % | 0.07 % | 2.7 % |
+| 1 000 000 | 99.950 % | 99.965 % | 99.877 % | 0.09 % | 0.15 % | 2.6 % |
+| 10 000 000 | 99.912 % | 99.932 % | 99.754 % | 0.15 % | 0.46 % | 2.5 % |
 
-At 10 million rows the review band (0.89 % of people, 9 549 pairs) is above the 0.5 % target. The number of
-borderline pairs grows faster than the data, because large estates contain more different people who share a
-common surname sound and date of birth; about 70 % of these pairs are true matches. Linking them automatically
-would lower precision, so they are left for a reviewer — the review effort, not the accuracy, is what grows.
+The first 10-million-row run missed the review-band target (0.89 %). Most borderline pairs were unrelated people
+sharing a common name and birthday; adding middle-name and street-address evidence and treating conflicting
+birth dates as different people brought it to 0.47 % while precision and recall both rose.
 
 Targets: auto-link precision ≥ 99.5 %, person-count error ≤ 1 %, review band ≤ 0.5 % of people, estimate within
 5 % of the final count. Real data can differ from synthetic data; the review band and the guards are there to
