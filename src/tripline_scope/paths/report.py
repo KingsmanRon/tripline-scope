@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+from collections import Counter
 
 import pyarrow as pa
 
@@ -159,8 +160,7 @@ def _content(case, a, analysis_sha, cfg, disp, cont, measures, tl_meta) -> dict:
             {c: sum(1 for p in rest if p["consequence_class"] == c) for c in CLASS_ORDER})},
         "edges_summary": {"direct": sum(1 for e in a["edges"] if e["label"] == "direct"),
                           "correlated": sum(1 for e in a["edges"] if e["label"] == "correlated"),
-                          "by_join": dict(sorted({e["join"]: sum(1 for x in a["edges"] if x["join"] == e["join"])
-                                                  for e in a["edges"]}.items()))},
+                          "by_join": dict(sorted(Counter(e["join"] for e in a["edges"]).items()))},
         "anomalies": anomalies, "detectors": a["detectors"],
         "indicator_matches": [{k: m[k] for k in ("match_id", "indicator_id", "indicator_type", "indicator_value",
                                                   "provenance", "reference", "event_id", "family", "field", "ts_utc",
@@ -351,13 +351,14 @@ def _timeline(store, a, disp, cap: int) -> tuple[dict, dict]:
             tbl = tbl.set_column(i, name, tbl.column(name).cast(pa.timestamp("us")))
         con = duck.connect()
         con.register("ev", tbl)
+        con.register("prio", pa.table({"pid": pa.array(tier0 + tier1, type=pa.string()),
+                                       "tier": pa.array([0] * len(tier0) + [1] * len(tier1), type=pa.int8())}))
         w0, w1 = as_utc(a["window"]["start"]).replace(tzinfo=None), as_utc(a["window"]["end"]).replace(tzinfo=None)
         total = con.execute("SELECT count(*) FROM ev WHERE ts_utc_max >= ? AND ts_utc_min <= ?", [w0, w1]).fetchone()[0]
         cur = con.execute(
-            "SELECT * FROM ev WHERE ts_utc_max >= ? AND ts_utc_min <= ? ORDER BY "
-            "CASE WHEN list_contains(?, event_id) THEN 0 WHEN list_contains(?, event_id) THEN 1 ELSE 2 END, "
-            "ts_utc NULLS LAST, source_id, ordinal LIMIT ?",
-            [w0, w1, tier0, tier1, cap])
+            "SELECT ev.* FROM ev LEFT JOIN prio ON prio.pid = ev.event_id WHERE ts_utc_max >= ? AND ts_utc_min <= ? "
+            "ORDER BY coalesce(prio.tier, 2), ts_utc NULLS LAST, source_id, ordinal LIMIT ?",
+            [w0, w1, cap])
         names = [d[0] for d in cur.description]
         for r in cur.fetchall():
             rows.append(dict(zip(names, r, strict=True)))
@@ -385,7 +386,8 @@ def _timeline(store, a, disp, cap: int) -> tuple[dict, dict]:
     w.writeheader()
     for r in out_rows:
         w.writerow({k: ("" if v is None else v) for k, v in r.items()})
-    jsonl = b"".join(canonical_bytes(r) + b"\n" for r in out_rows)
+    jsonl = "".join(json.dumps(r, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n"
+                    for r in out_rows).encode("utf-8")
     csv_bytes = buf.getvalue().encode("utf-8")
     key = [r for r in out_rows if r["path_ids"] or r["anomaly_ids"] or r["indicator_match"]]
     key = [r for r in key if r["consequence_class"] != "not_applicable" or r["anomaly_ids"] or r["indicator_match"]][:300]

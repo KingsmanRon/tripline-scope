@@ -127,6 +127,14 @@ class Analysis:
         self.b0 = as_utc(b["start"]) if b.get("start") else (min(starts + firsts) if (starts or firsts) else self.w0)
         self.b1 = min(as_utc(b["end"]) if b.get("end") else self.w0, self.w0)
 
+    def lookup(self, name: str, values) -> str:
+        """Register a one-column lookup table (hash semi-joins instead of large list parameters)."""
+        import pyarrow as pa
+
+        self.con.register(name, pa.table({"v": pa.array(sorted({str(v) for v in values if v is not None}),
+                                                         type=pa.string())}))
+        return f"(SELECT v FROM {name})"
+
     def q(self, sql: str, params: list | None = None) -> list[dict]:
         params = [p.astimezone(UTC).replace(tzinfo=None) if isinstance(p, dt.datetime) and p.tzinfo else p
                   for p in (params or [])]
@@ -353,15 +361,16 @@ class Analysis:
             f"SELECT DISTINCT request_id FROM ev WHERE source_family IN ({','.join(repr(f) for f in DB_FAMILIES)}) "
             f"AND request_id IS NOT NULL AND {inw}", w)}
         ind_ips = {i["value"] for i in self.indicators if i["type"] == "ip"}
-        interesting = sorted(admin | scripts_new)
+        lp, lr, li = (self.lookup("lk_paths", admin | scripts_new), self.lookup("lk_rids", db_rids),
+                      self.lookup("lk_ips", ind_ips))
         sel = self.q(f"SELECT {cols} FROM ev WHERE source_family IN ({fams}) AND {inw} AND "
-                     "(list_contains(?, url_path) OR list_contains(?, request_id) OR list_contains(?, remote_ip)) "
-                     "ORDER BY source_id, ordinal", w + [interesting, sorted(db_rids), sorted(ind_ips)])
+                     f"(url_path IN {lp} OR request_id IN {lr} OR remote_ip IN {li}) ORDER BY source_id, ordinal", w)
         rids = sorted({e["request_id"] for e in sel if e.get("request_id")})
         seen = {e["event_id"] for e in sel}
         if rids:
-            for e in self.q(f"SELECT {cols} FROM ev WHERE source_family IN ({fams}) AND list_contains(?, request_id) "
-                            f"AND {inw}", [rids] + w):
+            lr2 = self.lookup("lk_rids2", rids)
+            for e in self.q(f"SELECT {cols} FROM ev WHERE source_family IN ({fams}) AND request_id IN {lr2} "
+                            f"AND {inw}", w):
                 if e["event_id"] not in seen:
                     sel.append(e)
                     seen.add(e["event_id"])
@@ -385,11 +394,13 @@ class Analysis:
         ind_doms = {i["value"] for i in self.indicators if i["type"] == "domain"}
         dests = self.q(f"SELECT DISTINCT dest_ip FROM ev WHERE source_family IN ({fams}) AND dest_ip IS NOT NULL AND {inw}", w)
         external = sorted(r["dest_ip"] for r in dests if self._external(r["dest_ip"]))
+        ls, le, li, ld = (self.lookup("lk_src", src_ips), self.lookup("lk_ext", external),
+                          self.lookup("lk_iip", ind_ips), self.lookup("lk_idom", ind_doms))
         rows = self.q(
             f"SELECT {cols} FROM ev WHERE source_family IN ({fams}) AND {inw} AND "
-            "((list_contains(?, remote_ip) AND (list_contains(?, dest_ip) OR (dest_ip IS NULL AND domain IS NOT NULL)) "
-            "AND coalesce(bytes, 0) >= ?) OR list_contains(?, dest_ip) OR list_contains(?, domain)) ORDER BY source_id, ordinal",
-            w + [sorted(src_ips), external, int(self.cfg["egress_min_bytes"]), sorted(ind_ips), sorted(ind_doms)])
+            f"((remote_ip IN {ls} AND (dest_ip IN {le} OR (dest_ip IS NULL AND domain IS NOT NULL)) "
+            f"AND coalesce(bytes, 0) >= ?) OR dest_ip IN {li} OR domain IN {ld}) ORDER BY source_id, ordinal",
+            w + [int(self.cfg["egress_min_bytes"])])
         for ev in rows:
             u = self._new_unit("flow", ev)
             self._absorb(u, ev)
