@@ -1,0 +1,13 @@
+{
+  "auto_link_precision_pct": 99.961,
+  "data": "synthetic lab data with typos, swapped names, maiden names, twins, shared phones, missing IDs",
+  "dataset_rows": 1000000,
+  "date": "2026-10-16",
+  "method_version": "scope-method/0.1.0",
+  "pairwise_precision_pct": 99.965,
+  "pairwise_recall_pct": 99.837,
+  "person_count_error_pct": 0.108,
+  "preliminary_estimate_error_pct": 2.588,
+  "review_band_share_pct": 0.337,
+  "source": "bench/results/1000000.json"
+}
