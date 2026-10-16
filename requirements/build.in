@@ -1,0 +1,5 @@
+# Build machine only: tools that build our two wheels and fetch the pinned runtime wheels.
+# Never installed on a hospital host.
+pip
+setuptools>=69
+wheel

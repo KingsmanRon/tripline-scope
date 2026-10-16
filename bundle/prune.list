@@ -1,0 +1,14 @@
+# Files deleted from the installed environment right after the hash-verified install (globs relative to
+# site-packages). The wheels in the bundle stay unmodified, so their hashes still match the lock.
+#
+# Why: font data shipped inside the reportlab wheel whose licences fall outside the runtime licence policy.
+# Tripline Scope renders PDFs with the standard PDF fonts only and never loads these files. The Bitstream
+# Vera fonts (permissive licence) are kept. See docs/SUPPLY_CHAIN.md, "Native and bundled components".
+#
+# GPL-2.0-or-later WITH font exception (DarkGarden sample font, its licence texts and source)
+reportlab/fonts/DarkGarden*
+# Type 1 fonts carrying Adobe/Monotype "All Rights Reserved" notices and no licence grant in the wheel;
+# also callig15 (free-use notice) and the HarfBuzz test font (no licence text).
+reportlab/fonts/*.pfb
+reportlab/fonts/*.afm
+reportlab/fonts/hb-test.ttf

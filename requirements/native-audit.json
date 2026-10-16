@@ -1,0 +1,3097 @@
+{
+ "lock_sha256": "62c0537b6596c1e938a2b03810ac508e72b43370d483d94571c1e4d67005a195",
+ "packages": {
+  "argon2-cffi-bindings": {
+   "bundled_shared_libraries": [],
+   "extension_modules": [
+    "_argon2_cffi_bindings/_ffi.abi3.so"
+   ],
+   "licence_files": [
+    "argon2_cffi_bindings-26.1.0.dist-info/licenses/LICENSE"
+   ],
+   "vendored_shared_libraries": [],
+   "version": "26.1.0",
+   "wheel": "argon2_cffi_bindings-26.1.0-cp310-abi3-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl"
+  },
+  "cffi": {
+   "bundled_shared_libraries": [],
+   "extension_modules": [
+    "_cffi_backend.cpython-312-x86_64-linux-gnu.so"
+   ],
+   "licence_files": [
+    "cffi-2.1.1.dist-info/licenses/LICENSE"
+   ],
+   "vendored_shared_libraries": [],
+   "version": "2.1.1",
+   "wheel": "cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+  },
+  "charset-normalizer": {
+   "bundled_shared_libraries": [],
+   "extension_modules": [
+    "charset_normalizer/cd.cpython-312-x86_64-linux-gnu.so",
+    "charset_normalizer/md.cpython-312-x86_64-linux-gnu.so"
+   ],
+   "licence_files": [
+    "charset_normalizer-3.5.2.dist-info/licenses/LICENSE"
+   ],
+   "vendored_shared_libraries": [],
+   "version": "3.5.2",
+   "wheel": "charset_normalizer-3.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+  },
+  "cryptography": {
+   "bundled_shared_libraries": [],
+   "extension_modules": [
+    "cryptography/hazmat/bindings/_rust.abi3.so"
+   ],
+   "licence_files": [
+    "cryptography-50.0.2.dist-info/licenses/LICENSE",
+    "cryptography-50.0.2.dist-info/licenses/LICENSE.APACHE",
+    "cryptography-50.0.2.dist-info/licenses/LICENSE.BSD"
+   ],
+   "rust": {
+    "cargo_locks": [
+     {
+      "origin": "PyPI sdist cryptography-50.0.2.tar.gz (SHA-256 matches the lock)",
+      "path": "Cargo.lock",
+      "sha256": "98778208027ce05bfff0db88c290f28355eb20e685f0c728775359fb91a1a4c4"
+     }
+    ],
+    "crates": [
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "BSD-3-Clause",
+      "name": "asn1",
+      "version": "0.24.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "BSD-3-Clause",
+      "name": "asn1_derive",
+      "version": "0.24.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "base64",
+      "version": "0.23.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "bitflags",
+      "version": "2.13.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "cc",
+      "version": "1.4.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "cfg-if",
+      "version": "1.0.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "find-msvc-tools",
+      "version": "0.1.9"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "foreign-types",
+      "version": "0.3.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "foreign-types-shared",
+      "version": "0.1.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "heck",
+      "version": "0.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "itoa",
+      "version": "1.0.18"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "libc",
+      "version": "0.2.189"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "once_cell",
+      "version": "1.21.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "Apache-2.0",
+      "name": "openssl",
+      "version": "0.10.81"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "openssl-macros",
+      "version": "0.1.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT",
+      "name": "openssl-sys",
+      "version": "0.9.117"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT",
+      "name": "pem",
+      "version": "4.0.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pkg-config",
+      "version": "0.3.33"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "portable-atomic",
+      "version": "1.14.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "proc-macro2",
+      "version": "1.0.107"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3",
+      "version": "0.29.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3-build-config",
+      "version": "0.29.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3-ffi",
+      "version": "0.29.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3-macros",
+      "version": "0.29.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3-macros-backend",
+      "version": "0.29.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "quote",
+      "version": "1.0.47"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR GPL-2.0-only",
+      "name": "self_cell",
+      "version": "1.3.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "shlex",
+      "version": "2.0.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "syn",
+      "version": "2.0.119"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "name": "target-lexicon",
+      "version": "0.13.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "(MIT OR Apache-2.0) AND Unicode-3.0",
+      "name": "unicode-ident",
+      "version": "1.0.24"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "vcpkg",
+      "version": "0.2.15"
+     }
+    ],
+    "note": "evidence 'binary': source path embedded in the shipped extension (linked; a lower bound). 'Cargo.lock': listed in the build lock for all targets and features (a superset)."
+   },
+   "vendored_shared_libraries": [],
+   "version": "50.0.2",
+   "wheel": "cryptography-50.0.2-cp311-abi3-manylinux_2_28_x86_64.whl"
+  },
+  "duckdb": {
+   "bundled_shared_libraries": [],
+   "extension_modules": [
+    "_duckdb.cpython-312-x86_64-linux-gnu.so"
+   ],
+   "licence_files": [
+    "duckdb-1.5.6.dist-info/licenses/LICENSE",
+    "duckdb/experimental/spark/LICENSE"
+   ],
+   "vendored_shared_libraries": [],
+   "version": "1.5.6",
+   "wheel": "duckdb-1.5.6-cp312-cp312-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl"
+  },
+  "evtx": {
+   "bundled_shared_libraries": [],
+   "extension_modules": [
+    "evtx/_native.abi3.so"
+   ],
+   "licence_files": [],
+   "rust": {
+    "cargo_locks": [
+     {
+      "origin": "crates.io evtx-0.12.3.crate (checksum verified)",
+      "path": "Cargo.lock",
+      "sha256": "b0b93599f1c473f01b7589ac9721c93f9b6e46ba406c4c72aa2df48a9424b10f"
+     }
+    ],
+    "crates": [
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "ahash",
+      "version": "0.8.12"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unlicense OR MIT",
+      "name": "aho-corasick",
+      "version": "1.1.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "alloca",
+      "version": "0.4.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "anes",
+      "version": "0.1.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "anstream",
+      "version": "0.6.18"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "anstyle",
+      "version": "1.0.10"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "anstyle-parse",
+      "version": "0.2.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "anstyle-query",
+      "version": "1.1.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "anstyle-wincon",
+      "version": "3.0.7"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "anyhow",
+      "version": "1.0.100"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "assert_cmd",
+      "version": "2.1.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "autocfg",
+      "version": "1.4.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "bitflags",
+      "version": "1.3.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "bitflags",
+      "version": "2.8.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "bstr",
+      "version": "1.11.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "bumpalo",
+      "version": "3.19.1"
+     },
+     {
+      "evidence": [
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "bumpalo",
+      "version": "3.20.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0/MIT",
+      "name": "bytecount",
+      "version": "0.6.8"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unlicense OR MIT",
+      "name": "byteorder",
+      "version": "1.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "bytes",
+      "version": "1.11.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "camino",
+      "version": "1.1.9"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "cargo-platform",
+      "version": "0.1.9"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "cargo_metadata",
+      "version": "0.14.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "cast",
+      "version": "0.3.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "cc",
+      "version": "1.2.15"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "cfg-if",
+      "version": "1.0.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "chrono",
+      "version": "0.4.39"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0",
+      "name": "ciborium",
+      "version": "0.2.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0",
+      "name": "ciborium-io",
+      "version": "0.2.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0",
+      "name": "ciborium-ll",
+      "version": "0.2.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "clap",
+      "version": "4.5.30"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "clap_builder",
+      "version": "4.5.30"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "clap_lex",
+      "version": "0.7.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "colorchoice",
+      "version": "1.0.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "comma",
+      "version": "1.0.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "console",
+      "version": "0.15.10"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "console",
+      "version": "0.16.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "crc32fast",
+      "version": "1.4.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "criterion",
+      "version": "0.8.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "criterion-plot",
+      "version": "0.8.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "crossbeam-deque",
+      "version": "0.8.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "crossbeam-epoch",
+      "version": "0.9.18"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "crossbeam-utils",
+      "version": "0.8.21"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "crunchy",
+      "version": "0.2.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "deranged",
+      "version": "0.5.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "dialoguer",
+      "version": "0.12.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "diff",
+      "version": "0.1.13"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "difflib",
+      "version": "0.4.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "either",
+      "version": "1.15.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "encode_unicode",
+      "version": "1.0.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT",
+      "name": "encoding",
+      "version": "0.2.33"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "CC0-1.0",
+      "name": "encoding-index-japanese",
+      "version": "1.20141219.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "CC0-1.0",
+      "name": "encoding-index-korean",
+      "version": "1.20141219.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "CC0-1.0",
+      "name": "encoding-index-simpchinese",
+      "version": "1.20141219.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "CC0-1.0",
+      "name": "encoding-index-singlebyte",
+      "version": "1.20141219.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "CC0-1.0",
+      "name": "encoding-index-tradchinese",
+      "version": "1.20141219.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "CC0-1.0",
+      "name": "encoding_index_tests",
+      "version": "0.1.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "env_filter",
+      "version": "0.1.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "env_logger",
+      "version": "0.11.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "equivalent",
+      "version": "1.0.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "errno",
+      "version": "0.3.10"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "error-chain",
+      "version": "0.12.4"
+     },
+     {
+      "evidence": [
+       "binary"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "evtx",
+      "version": "0.12.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "fastrand",
+      "version": "2.3.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "faststr",
+      "version": "0.2.32"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "float-cmp",
+      "version": "0.10.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "getrandom",
+      "version": "0.3.1"
+     },
+     {
+      "evidence": [
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "getrandom",
+      "version": "0.3.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "glob",
+      "version": "0.3.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "goblin",
+      "version": "0.10.4"
+     },
+     {
+      "evidence": [
+       "binary"
+      ],
+      "license": "MIT",
+      "name": "goblin",
+      "version": "0.10.7"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "half",
+      "version": "2.4.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "hashbrown",
+      "version": "0.15.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "hashbrown",
+      "version": "0.17.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "humantime",
+      "version": "2.1.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "indexmap",
+      "version": "2.7.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "indoc",
+      "version": "2.0.7"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0",
+      "name": "insta",
+      "version": "1.42.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "is_terminal_polyfill",
+      "version": "1.70.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "itertools",
+      "version": "0.13.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "itoa",
+      "version": "1.0.14"
+     },
+     {
+      "evidence": [
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "itoa",
+      "version": "1.0.18"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unlicense OR MIT",
+      "name": "jiff",
+      "version": "0.2.17"
+     },
+     {
+      "evidence": [
+       "binary"
+      ],
+      "license": "Unlicense OR MIT",
+      "name": "jiff",
+      "version": "0.2.28"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unlicense OR MIT",
+      "name": "jiff-static",
+      "version": "0.2.17"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unlicense OR MIT",
+      "name": "jiff-tzdb",
+      "version": "0.1.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unlicense OR MIT",
+      "name": "jiff-tzdb-platform",
+      "version": "0.1.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "js-sys",
+      "version": "0.3.77"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "libc",
+      "version": "0.2.169"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "linked-hash-map",
+      "version": "0.5.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "name": "linux-raw-sys",
+      "version": "0.4.15"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "log",
+      "version": "0.4.26"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unlicense OR MIT",
+      "name": "memchr",
+      "version": "2.7.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "munge",
+      "version": "0.4.7"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "munge_macro",
+      "version": "0.4.7"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "nix",
+      "version": "0.27.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0",
+      "name": "normalize-line-endings",
+      "version": "0.3.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "num-conv",
+      "version": "0.2.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "num-derive",
+      "version": "0.3.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "num-traits",
+      "version": "0.2.19"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "num_threads",
+      "version": "0.1.7"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "once_cell",
+      "version": "1.20.3"
+     },
+     {
+      "evidence": [
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "once_cell",
+      "version": "1.21.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "oorandom",
+      "version": "11.1.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "page_size",
+      "version": "0.6.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "pin-project",
+      "version": "1.1.9"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "pin-project-internal",
+      "version": "1.1.9"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pkg-config",
+      "version": "0.3.31"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "plain",
+      "version": "0.2.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "plotters",
+      "version": "0.3.7"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "plotters-backend",
+      "version": "0.3.7"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "plotters-svg",
+      "version": "0.3.7"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "portable-atomic",
+      "version": "1.13.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "portable-atomic-util",
+      "version": "0.2.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "powerfmt",
+      "version": "0.2.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "predicates",
+      "version": "3.1.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "predicates-core",
+      "version": "1.0.9"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "predicates-tree",
+      "version": "1.0.12"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pretty_assertions",
+      "version": "1.4.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "proc-macro2",
+      "version": "1.0.104"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "ptr_meta",
+      "version": "0.3.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "ptr_meta_derive",
+      "version": "0.3.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "pulldown-cmark",
+      "version": "0.9.6"
+     },
+     {
+      "evidence": [
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3",
+      "version": "0.29.2"
+     },
+     {
+      "evidence": [
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3-ffi",
+      "version": "0.29.2"
+     },
+     {
+      "evidence": [
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3-stub-gen",
+      "version": "0.23.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "quote",
+      "version": "1.0.42"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "rancor",
+      "version": "0.1.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "rayon",
+      "version": "1.10.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "rayon-core",
+      "version": "1.12.1"
+     },
+     {
+      "evidence": [
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "rayon-core",
+      "version": "1.13.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "ref-cast",
+      "version": "1.0.25"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "ref-cast-impl",
+      "version": "1.0.25"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "regex",
+      "version": "1.11.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "regex-automata",
+      "version": "0.4.9"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "regex-syntax",
+      "version": "0.8.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "rend",
+      "version": "0.5.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "rexpect",
+      "version": "0.6.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "rkyv",
+      "version": "0.8.16"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "rkyv_derive",
+      "version": "0.8.16"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "rpmalloc",
+      "version": "0.2.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "rpmalloc-sys",
+      "version": "0.2.3+b097fd0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "name": "rustix",
+      "version": "0.38.44"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "rustversion",
+      "version": "1.0.19"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR BSL-1.0",
+      "name": "ryu",
+      "version": "1.0.19"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unlicense/MIT",
+      "name": "same-file",
+      "version": "1.0.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "scroll",
+      "version": "0.13.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "scroll_derive",
+      "version": "0.13.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "semver",
+      "version": "1.0.25"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "serde",
+      "version": "1.0.228"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "serde_core",
+      "version": "1.0.228"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "serde_derive",
+      "version": "1.0.228"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "serde_json",
+      "version": "1.0.139"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "shell-words",
+      "version": "1.1.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "shlex",
+      "version": "1.3.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "simdutf8",
+      "version": "0.1.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0",
+      "name": "similar",
+      "version": "2.7.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "simplelog",
+      "version": "0.12.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "skeptic",
+      "version": "0.13.7"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0",
+      "name": "sonic-number",
+      "version": "0.1.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0",
+      "name": "sonic-rs",
+      "version": "0.5.6"
+     },
+     {
+      "evidence": [
+       "binary"
+      ],
+      "license": "Apache-2.0",
+      "name": "sonic-rs",
+      "version": "0.5.8"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0",
+      "name": "sonic-simd",
+      "version": "0.1.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "strsim",
+      "version": "0.11.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "syn",
+      "version": "1.0.109"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "syn",
+      "version": "2.0.111"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "tempfile",
+      "version": "3.17.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unlicense OR MIT",
+      "name": "termcolor",
+      "version": "1.4.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "termtree",
+      "version": "0.5.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "thiserror",
+      "version": "1.0.69"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "thiserror",
+      "version": "2.0.17"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "thiserror-impl",
+      "version": "1.0.69"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "thiserror-impl",
+      "version": "2.0.17"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "tikv-jemalloc-sys",
+      "version": "0.6.0+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "tikv-jemallocator",
+      "version": "0.6.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "time",
+      "version": "0.3.47"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "time-core",
+      "version": "0.1.8"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "time-macros",
+      "version": "0.2.27"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "tinytemplate",
+      "version": "1.2.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "name": "tinyvec",
+      "version": "1.10.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0 OR Zlib",
+      "name": "tinyvec_macros",
+      "version": "0.1.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "unicase",
+      "version": "2.8.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "(MIT OR Apache-2.0) AND Unicode-3.0",
+      "name": "unicode-ident",
+      "version": "1.0.17"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "unicode-width",
+      "version": "0.2.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "utf16-simd",
+      "version": "0.1.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "utf8parse",
+      "version": "0.2.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "uuid",
+      "version": "1.19.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "version_check",
+      "version": "0.9.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "wait-timeout",
+      "version": "0.2.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unlicense/MIT",
+      "name": "walkdir",
+      "version": "2.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "name": "wasi",
+      "version": "0.13.3+wasi-0.2.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen",
+      "version": "0.2.100"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen-backend",
+      "version": "0.2.100"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen-macro",
+      "version": "0.2.100"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen-macro-support",
+      "version": "0.2.100"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen-shared",
+      "version": "0.2.100"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "web-sys",
+      "version": "0.3.77"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "winapi",
+      "version": "0.3.9"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "winapi-i686-pc-windows-gnu",
+      "version": "0.4.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unlicense OR MIT",
+      "name": "winapi-util",
+      "version": "0.1.9"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "winapi-x86_64-pc-windows-gnu",
+      "version": "0.4.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "windows-link",
+      "version": "0.2.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "windows-sys",
+      "version": "0.59.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "windows-sys",
+      "version": "0.61.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "windows-targets",
+      "version": "0.52.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "windows_aarch64_gnullvm",
+      "version": "0.52.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "windows_aarch64_msvc",
+      "version": "0.52.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "windows_i686_gnu",
+      "version": "0.52.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "windows_i686_gnullvm",
+      "version": "0.52.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "windows_i686_msvc",
+      "version": "0.52.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "windows_x86_64_gnu",
+      "version": "0.52.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "windows_x86_64_gnullvm",
+      "version": "0.52.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "windows_x86_64_msvc",
+      "version": "0.52.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "winstructs",
+      "version": "0.3.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "name": "wit-bindgen-rt",
+      "version": "0.33.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "yansi",
+      "version": "1.0.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
+      "name": "zerocopy",
+      "version": "0.8.31"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
+      "name": "zerocopy-derive",
+      "version": "0.8.31"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "zeroize",
+      "version": "1.8.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "zmij",
+      "version": "1.0.1"
+     }
+    ],
+    "note": "evidence 'binary': source path embedded in the shipped extension (linked; a lower bound). 'Cargo.lock': listed in the build lock for all targets and features (a superset)."
+   },
+   "vendored_shared_libraries": [],
+   "version": "0.13.1",
+   "wheel": "evtx-0.13.1-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+  },
+  "markupsafe": {
+   "bundled_shared_libraries": [],
+   "extension_modules": [
+    "markupsafe/_speedups.cpython-312-x86_64-linux-gnu.so"
+   ],
+   "licence_files": [
+    "markupsafe-3.0.4.dist-info/licenses/LICENSE.txt"
+   ],
+   "vendored_shared_libraries": [],
+   "version": "3.0.4",
+   "wheel": "markupsafe-3.0.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+  },
+  "pillow": {
+   "bundled_shared_libraries": [
+    "libXau-154567c4.so.6.0.0",
+    "libavif-8a7f9d56.so.16.4.2",
+    "libbrotlicommon-53534446.so.1.2.0",
+    "libbrotlidec-7e5462ba.so.1.2.0",
+    "libfreetype-9fc94c80.so.6.20.6",
+    "libharfbuzz-172d1f63.so.0.61421.0",
+    "libjpeg-31e2ca52.so.62.4.0",
+    "liblcms2-dade1fbf.so.2.0.19",
+    "liblzma-2be87c3e.so.5.8.3",
+    "libopenjp2-b07f72ad.so.2.5.4",
+    "libpng16-abb096d5.so.16.58.0",
+    "libsharpyuv-0066295b.so.0.1.2",
+    "libtiff-fc87e79d.so.6.2.0",
+    "libwebp-51b0b3f7.so.7.2.0",
+    "libwebpdemux-9fe2abcc.so.2.0.17",
+    "libwebpmux-8fb1c9f6.so.3.1.2",
+    "libxcb-ad31f5a3.so.1.1.0",
+    "libzstd-44be1190.so.1.5.7"
+   ],
+   "extension_modules": [
+    "PIL/_avif.cpython-312-x86_64-linux-gnu.so",
+    "PIL/_imaging.cpython-312-x86_64-linux-gnu.so",
+    "PIL/_imagingcms.cpython-312-x86_64-linux-gnu.so",
+    "PIL/_imagingft.cpython-312-x86_64-linux-gnu.so",
+    "PIL/_imagingmath.cpython-312-x86_64-linux-gnu.so",
+    "PIL/_imagingmorph.cpython-312-x86_64-linux-gnu.so",
+    "PIL/_imagingtk.cpython-312-x86_64-linux-gnu.so",
+    "PIL/_webp.cpython-312-x86_64-linux-gnu.so"
+   ],
+   "licence_files": [
+    "pillow-12.3.0.dist-info/licenses/LICENSE"
+   ],
+   "vendored_shared_libraries": [],
+   "version": "12.3.0",
+   "wheel": "pillow-12.3.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
+  },
+  "pyarrow": {
+   "bundled_shared_libraries": [],
+   "extension_modules": [
+    "pyarrow/_acero.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_azurefs.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_compute.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_csv.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_dataset.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_dataset_orc.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_dataset_parquet.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_dataset_parquet_encryption.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_feather.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_flight.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_fs.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_gcsfs.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_hdfs.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_json.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_orc.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_parquet.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_parquet_encryption.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_pyarrow_cpp_tests.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_s3fs.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/_substrait.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/lib.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/libarrow_python.so",
+    "pyarrow/libarrow_python_flight.so",
+    "pyarrow/libarrow_python_parquet_encryption.so"
+   ],
+   "licence_files": [
+    "pyarrow-26.0.0.dist-info/licenses/LICENSE.txt",
+    "pyarrow-26.0.0.dist-info/licenses/NOTICE.txt"
+   ],
+   "vendored_shared_libraries": [
+    "pyarrow/lib.cpython-312-x86_64-linux-gnu.so",
+    "pyarrow/libarrow.so.2600",
+    "pyarrow/libarrow_acero.so.2600",
+    "pyarrow/libarrow_compute.so.2600",
+    "pyarrow/libarrow_dataset.so.2600",
+    "pyarrow/libarrow_flight.so.2600",
+    "pyarrow/libarrow_python.so",
+    "pyarrow/libarrow_python.so.2600",
+    "pyarrow/libarrow_python.so.2600.0.0",
+    "pyarrow/libarrow_python_flight.so",
+    "pyarrow/libarrow_python_flight.so.2600",
+    "pyarrow/libarrow_python_flight.so.2600.0.0",
+    "pyarrow/libarrow_python_parquet_encryption.so",
+    "pyarrow/libarrow_python_parquet_encryption.so.2600",
+    "pyarrow/libarrow_python_parquet_encryption.so.2600.0.0",
+    "pyarrow/libarrow_s3.so.2600",
+    "pyarrow/libarrow_substrait.so.2600",
+    "pyarrow/libparquet.so.2600"
+   ],
+   "version": "26.0.0",
+   "wheel": "pyarrow-26.0.0-cp312-cp312-manylinux_2_28_x86_64.whl"
+  },
+  "pydantic-core": {
+   "bundled_shared_libraries": [],
+   "extension_modules": [
+    "pydantic_core/_pydantic_core.cpython-312-x86_64-linux-gnu.so"
+   ],
+   "licence_files": [
+    "pydantic_core-2.50.1.dist-info/licenses/LICENSE"
+   ],
+   "rust": {
+    "cargo_locks": [
+     {
+      "origin": "PyPI sdist pydantic_core-2.50.1.tar.gz (SHA-256 matches the lock)",
+      "path": "Cargo.lock",
+      "sha256": "ac24753c2ed315f8dc22d6470fa868970e3705a0888d879704e872d53f21452d"
+     }
+    ],
+    "crates": [
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "ahash",
+      "version": "0.8.12"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "Unlicense OR MIT",
+      "name": "aho-corasick",
+      "version": "1.1.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "autocfg",
+      "version": "1.3.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "base64",
+      "version": "0.23.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "bitflags",
+      "version": "2.9.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "bitvec",
+      "version": "1.0.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "bumpalo",
+      "version": "3.19.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "cfg-if",
+      "version": "1.0.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "displaydoc",
+      "version": "0.2.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "enum_dispatch",
+      "version": "0.3.13"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Zlib",
+      "name": "foldhash",
+      "version": "0.2.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "form_urlencoded",
+      "version": "1.2.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "funty",
+      "version": "2.0.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "getrandom",
+      "version": "0.3.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "hashbrown",
+      "version": "0.17.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "heck",
+      "version": "0.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "hex",
+      "version": "0.4.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "icu_collections",
+      "version": "1.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "icu_locid",
+      "version": "1.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "icu_locid_transform",
+      "version": "1.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "icu_locid_transform_data",
+      "version": "1.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "Unicode-3.0",
+      "name": "icu_normalizer",
+      "version": "1.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "icu_normalizer_data",
+      "version": "1.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "icu_properties",
+      "version": "1.5.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "icu_properties_data",
+      "version": "1.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "icu_provider",
+      "version": "1.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "icu_provider_macros",
+      "version": "1.5.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "idna",
+      "version": "1.1.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "idna_adapter",
+      "version": "1.2.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "itoa",
+      "version": "1.0.11"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT",
+      "name": "jiter",
+      "version": "0.16.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "js-sys",
+      "version": "0.3.77"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "lexical-parse-float",
+      "version": "1.0.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "lexical-parse-integer",
+      "version": "1.0.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "lexical-util",
+      "version": "1.0.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "libc",
+      "version": "0.2.185"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "litemap",
+      "version": "0.7.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "log",
+      "version": "0.4.27"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT",
+      "name": "lru",
+      "version": "0.18.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "Unlicense OR MIT",
+      "name": "memchr",
+      "version": "2.7.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "num-bigint",
+      "version": "0.4.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "num-integer",
+      "version": "0.1.46"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "num-traits",
+      "version": "0.2.19"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "once_cell",
+      "version": "1.21.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "percent-encoding",
+      "version": "2.3.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "portable-atomic",
+      "version": "1.6.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "proc-macro2",
+      "version": "1.0.107"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3",
+      "version": "0.29.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3-build-config",
+      "version": "0.29.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3-ffi",
+      "version": "0.29.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3-macros",
+      "version": "0.29.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "pyo3-macros-backend",
+      "version": "0.29.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "quote",
+      "version": "1.0.44"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0 OR LGPL-2.1-or-later",
+      "name": "r-efi",
+      "version": "5.2.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "radium",
+      "version": "0.7.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "regex",
+      "version": "1.13.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "regex-automata",
+      "version": "0.4.18"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "regex-syntax",
+      "version": "0.8.11"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "serde",
+      "version": "1.0.229"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "serde_core",
+      "version": "1.0.229"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "serde_derive",
+      "version": "1.0.229"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "serde_json",
+      "version": "1.0.151"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "smallvec",
+      "version": "1.16.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT",
+      "name": "speedate",
+      "version": "0.17.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "stable_deref_trait",
+      "version": "1.2.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "static_assertions",
+      "version": "1.1.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "strum",
+      "version": "0.27.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "strum_macros",
+      "version": "0.27.2"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "syn",
+      "version": "2.0.82"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "syn",
+      "version": "3.0.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "synstructure",
+      "version": "0.13.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "tap",
+      "version": "1.0.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "name": "target-lexicon",
+      "version": "0.13.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "tinystr",
+      "version": "0.7.6"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "(MIT OR Apache-2.0) AND Unicode-DFS-2016",
+      "name": "unicode-ident",
+      "version": "1.0.12"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "url",
+      "version": "2.5.8"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "utf16_iter",
+      "version": "1.0.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "utf8_iter",
+      "version": "1.0.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock",
+       "binary"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "uuid",
+      "version": "1.23.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT/Apache-2.0",
+      "name": "version_check",
+      "version": "0.9.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "name": "wasi",
+      "version": "0.14.2+wasi-0.2.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen",
+      "version": "0.2.100"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen-backend",
+      "version": "0.2.100"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen-macro",
+      "version": "0.2.100"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen-macro-support",
+      "version": "0.2.100"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen-shared",
+      "version": "0.2.100"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "name": "wit-bindgen-rt",
+      "version": "0.39.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "name": "write16",
+      "version": "1.0.0"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "writeable",
+      "version": "0.5.5"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "wyz",
+      "version": "0.5.1"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "yoke",
+      "version": "0.7.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "yoke-derive",
+      "version": "0.7.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
+      "name": "zerocopy",
+      "version": "0.8.25"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
+      "name": "zerocopy-derive",
+      "version": "0.8.25"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "zerofrom",
+      "version": "0.1.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "zerofrom-derive",
+      "version": "0.1.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "zerovec",
+      "version": "0.10.4"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "Unicode-3.0",
+      "name": "zerovec-derive",
+      "version": "0.10.3"
+     },
+     {
+      "evidence": [
+       "Cargo.lock"
+      ],
+      "license": "MIT",
+      "name": "zmij",
+      "version": "1.0.6"
+     }
+    ],
+    "note": "evidence 'binary': source path embedded in the shipped extension (linked; a lower bound). 'Cargo.lock': listed in the build lock for all targets and features (a superset)."
+   },
+   "vendored_shared_libraries": [],
+   "version": "2.50.1",
+   "wheel": "pydantic_core-2.50.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+  },
+  "pyyaml": {
+   "bundled_shared_libraries": [],
+   "extension_modules": [
+    "yaml/_yaml.cpython-312-x86_64-linux-gnu.so"
+   ],
+   "licence_files": [
+    "pyyaml-6.0.3.dist-info/licenses/LICENSE"
+   ],
+   "vendored_shared_libraries": [],
+   "version": "6.0.3",
+   "wheel": "pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+  }
+ },
+ "schema": "tripline.native-audit/v1"
+}
