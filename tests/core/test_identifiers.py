@@ -109,3 +109,21 @@ def test_duckdb_is_sandboxed(tmp_path):
         with pytest.raises(Exception):
             con.execute(q).fetchall()
     assert sorted(p.name for p in tmp_path.iterdir()) == ["ok.csv", "other.csv"]
+
+
+def test_hash_tokens_are_not_identifiers():
+    import hashlib
+
+    from tripline_scope.core.redact import find_identifier_like, scrub_text
+
+    flagged = [h for h in (hashlib.sha256(str(i).encode()).hexdigest() for i in range(20000)) if find_identifier_like(h)]
+    assert flagged == []
+    h = hashlib.sha256(b"tripline").hexdigest()
+    assert scrub_text(f"sha {h} end") == f"sha {h} end"
+    # real identifiers next to hashes are still found and scrubbed
+    assert "sa_id" in find_identifier_like(f"{h} 8001015009087")
+    assert "card" in find_identifier_like("4111 1111 1111 1111 " + h)
+    assert "phone" in find_identifier_like(h + " 082 555 1234")
+    assert "8001015009087" not in scrub_text(f"{h} 8001015009087")
+    # a short hex-ish token is not treated as a hash
+    assert "card" in find_identifier_like("a4111111111111111b")
