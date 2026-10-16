@@ -38,7 +38,7 @@ with the reason. No timing in this document is a guarantee.
 | Unique-person count error, 10M | ≤ 1 % | **0.15 %** (1 410 524 predicted vs 1 408 377 true) | Pass |
 | Review band, 10M | ≤ 0.5 % of people | **0.465 %** (6 557 people, 4 445 pairs; 0.07 % at 100k, 0.15 % at 1M). First run missed at 0.89 %; fixed — see §4.1 | Pass |
 | Preliminary estimate vs final count | within 5 % | **2.5 %** at 10M (2.7 % at 100k, 2.6 % at 1M); the true count is inside the stated range in every run (lower end calibrated — §4.1) | Pass |
-| Estimate time, 80M rows | < 1 h | see §4.2 | see §4.2 |
+| Estimate time, 80M rows | < 1 h | **out of memory** on 15.7 GB with spill disabled; 40 s at 10M; projected 5–6 min at 80M on 64 GB (not measured) — §4.2 | **Not achieved here** |
 | Full run, 10M rows | < 2 h on 16 cores/64 GB | **≈ 2 min** for extract → load → estimate → match → people on 4 vCPU/15.7 GB, peak RSS 6.2 GB (`bench/results/10000000.json`); SQL Server restore + discovery at 10M **not run** — at the measured 14–32k rows/s it projects to roughly 20–40 min for the ~30M rows of a 10M-admission estate | Pass for matching; ingest projected, not measured |
 | Full run, 80M rows | < 24 h | **Not run** (needs > 15.7 GB RAM for matching) | Not run |
 | Source safety | checksums identical; no write reaches a source | identical before/after every demo command and every module test; process write guard + inotify watcher tests (`tests/core`, `tests/ingest`, `tests/acceptance`) | Pass |
@@ -71,9 +71,17 @@ when one person carries two valid IDs) or far too loose at scale (transitive mer
 10M). The lower end is now the point estimate minus 5 % — calibrated on synthetic data, where the estimate was
 2.2–2.7 % above the truth in every run — and is labelled as calibrated in the report and in METHOD.md.
 
-### 4.2 Preliminary estimate at 80M rows
+### 4.2 Preliminary estimate at 80M rows — not achieved on this machine
 
-_Pending: filled in from `bench/results/estimate_80000000.json` when the run completes._
+* Synthetic generation of 80M admission rows (~20M identity rows): **5 443 s**; extract to encrypted Parquet: **268 s**.
+* Loading the identity rows for the estimate then ran out of memory twice: at DuckDB's default cap (10.6 GB) and at
+  a 13 GB cap with 2 threads (12.1 GB used). Spilling to disk is deliberately disabled because it would write
+  plaintext temporary files (see SECURITY.md), so the in-memory identity table bounds the size this machine can do.
+* Measured scaling: the estimate path (load + estimate) took 2.8 s at 200k and **40 s at 10M** with 6.2 GB peak.
+  Linear scaling projects about 5–6 minutes and roughly 45–50 GB at 80M — within the 1-hour target on the 64 GB
+  reference machine, but **this is a projection, not a measurement**.
+* Remedies: run on the reference hardware; or an administrator attests an encrypted spill volume
+  (`duckdb.spill_dir` + `spill_dir_encrypted: true`); or (v1) a lean estimate path that loads only the key columns.
 
 ### 4.3 Module measurements (synthetic, 4 vCPU shared)
 
