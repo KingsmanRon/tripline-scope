@@ -248,7 +248,7 @@ def _prepare_identity(con, cfg: dict, ref: dt.date) -> None:
         tscope_sa_id_norm(guardian_sa_id) AS g_sa_id_n,
         nullif(lower(trim(language)), '') AS lang
       FROM b)
-    SELECT c.* EXCLUDE (fn0, ln0, mn0, md0, fn1, ln1, md1), c.first_tok AS first,
+    SELECT c.* EXCLUDE (fn0, ln0, mn0, md0, fn1, ln1, md1), c.first_tok AS first, c.fn1 AS first_disp, c.ln1 AS last_disp,
            coalesce(v.canon, c.first_tok) AS first_c
     FROM c LEFT JOIN name_variants v ON v.name = c.first_tok""")
     con.execute(f"""
@@ -276,7 +276,7 @@ def _prepare_identity(con, cfg: dict, ref: dt.date) -> None:
         OR (address IS NOT NULL AND {"postal_code IS NOT NULL" if cfg["contact"]["address_requires_postal_code"] else "TRUE"}))
         AS own_contact,
       (g_phone_n IS NOT NULL OR g_email_n IS NOT NULL) AS guardian_contact,
-      g_sa_id_n AS guardian_sa_id,
+      g_sa_id_n AS guardian_sa_id, first_disp, last_disp, address, guardian_name, g_phone_n AS g_phone, g_email_n AS g_email,
       ((CASE WHEN last IS NOT NULL THEN 1 ELSE 0 END) + (CASE WHEN dob IS NOT NULL THEN 1 ELSE 0 END)
        + (CASE WHEN sa_id_n IS NOT NULL THEN 1 ELSE 0 END) + (CASE WHEN passport IS NOT NULL THEN 1 ELSE 0 END))
         >= {min_ids} AS usable,

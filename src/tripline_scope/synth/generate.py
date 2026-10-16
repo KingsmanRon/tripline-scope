@@ -250,7 +250,8 @@ FROM bil WHERE card0 IS NOT NULL OR bank_account IS NOT NULL
 class Generator:
     def __init__(self, out_dir: Path | str, rows: int, *, seed: int = DEFAULT_SEED, databases: int = 10,
                  reference_date: dt.date = DEFAULT_REFERENCE_DATE, leak_rows: int = 300,
-                 chunk_persons: int = 400_000, threads: int | None = None, progress=None):
+                 chunk_persons: int = 400_000, threads: int | None = None, progress=None,
+                 styles: list[dict] | None = None):
         if rows < 100:
             raise ValueError("rows must be at least 100")
         if not 1 <= databases <= 99:
@@ -265,6 +266,14 @@ class Generator:
         self.progress = progress or (lambda msg: None)
         self.threads = threads
         self.leak_db = LEAK_DB if self.n_dbs >= LEAK_DB else 1
+        self.custom_styles = list(styles or [])
+
+    def _style(self, d: int) -> tuple[str, dict]:
+        """(key-format letter, column layout) for database ``d``; custom layouts (drills) cycle over databases."""
+        if self.custom_styles:
+            st = self.custom_styles[(d - 1) % len(self.custom_styles)]
+            return st.get("key_style", "A"), st
+        return style_of(d), STYLES[style_of(d)]
 
     # ---------------------------------------------------------------------------------------------- run
     def run(self) -> dict:
@@ -385,7 +394,7 @@ class Generator:
         FROM per2 p LEFT JOIN per2 g ON g.pid = p.guardian_pid""")
         stats["twins"] += con.execute("SELECT count(*) FROM people WHERE role = 'twin'").fetchone()[0]
         # ---------------------------------------------------------------- registrations
-        styles_case = _case("db", {str(d): f"'{STYLES[style_of(d)]['case']}'" for d in range(1, self.n_dbs + 1)},
+        styles_case = _case("db", {str(d): f"'{self._style(d)[1]['case']}'" for d in range(1, self.n_dbs + 1)},
                             "'upper'").replace("CASE db WHEN '", "CASE db::VARCHAR WHEN '")
         con.execute(f"""
         CREATE OR REPLACE TEMP TABLE regs0 AS
@@ -529,7 +538,7 @@ class Generator:
         FROM e""")
         # ---------------------------------------------------------------- write per database
         for d in range(1, self.n_dbs + 1):
-            st = STYLES[style_of(d)]
+            st = self._style(d)[1]
             for table in TABLES:
                 sql = self._select_sql(d, table, st, seqs)
                 reader = con.execute(sql).fetch_record_batch(200_000)
@@ -569,7 +578,7 @@ class Generator:
     def _key_case(self, db_col: str, num_col: str) -> str:
         parts = []
         for d in range(1, self.n_dbs + 1):
-            parts.append(f"WHEN {d} THEN {self._key_fmt(style_of(d), num_col)}")
+            parts.append(f"WHEN {d} THEN {self._key_fmt(self._style(d)[0], num_col)}")
         return f"CASE {db_col} {' '.join(parts)} END"
 
     @staticmethod
@@ -590,7 +599,7 @@ class Generator:
 
     def _select_sql(self, d: int, table: str, st: dict, seqs) -> str:
         cols = st[table]
-        style = style_of(d)
+        style = self._style(d)[0]
         if table == "patients":
             return self._patients_sql(d, st, style)
         off = seqs[(d, table)]
@@ -692,8 +701,7 @@ class Generator:
 
         dbs = []
         for d in range(1, self.n_dbs + 1):
-            style = style_of(d)
-            st = STYLES[style]
+            style, st = self._style(d)
             dbs.append({
                 "database": db_name(d), "style": style, "path": f"sources/{db_name(d)}",
                 "tables": {t: {"rows": counters[(d, t)], "columns": st[t]} for t in TABLES},

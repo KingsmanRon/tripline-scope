@@ -1,0 +1,57 @@
+{#- Notification of a security compromise (POPIA section 22). English template shipped with Tripline Scope.
+    Hospitals add translations as templates/notices/<language>/notice.md.j2 (same variables), and may override a
+    single exposure combination with templates/notices/<language>/<combination>.md.j2.
+    Merge fields in «guillemets» are filled by the hospital's mail-merge or SMS system from people.csv. -#}
+# Notice of a security compromise affecting your personal information
+
+{% if audience == "guardian" -%}
+Dear parent or guardian of «first_name» «last_name»,
+
+We are writing to you because you are recorded as the parent or guardian of «first_name», who is under 18.
+{%- else -%}
+Dear «first_name» «last_name»,
+{%- endif %}
+
+Reference: «person_ref»
+
+## What happened and when
+
+Between {{ incident_start }} and {{ incident_end }}, {{ hospital_name }} became aware that an unauthorised person
+gained access to systems that hold patient records. {% if consequence == "confirmed_copy" -%}
+We have confirmed that a copy of some information about {{ "your child" if audience == "guardian" else "you" }} was
+obtained by an unauthorised party.
+{%- elif consequence == "access_observed" -%}
+Our investigation shows that the records containing information about {{ "your child" if audience == "guardian" else "you" }}
+were accessed. We have not confirmed that the information was copied.
+{%- else -%}
+The records containing information about {{ "your child" if audience == "guardian" else "you" }} may have been accessed.
+We have no evidence at this stage that the information was copied, but we cannot rule it out.
+{%- endif %}
+
+The information involved:
+{% for c in categories %}
+- {{ c.label }}
+{%- endfor %}
+
+## What we are doing
+
+{% for m in measures -%}
+- {{ m }}
+{% endfor %}
+## What you can do
+
+{% for c in categories if c.advice -%}
+- {{ c.advice }}
+{% endfor -%}
+- Be careful of phone calls, SMS or e-mail messages that mention this incident or ask for passwords, PINs or payments.
+  {{ hospital_name }} will never ask you for your banking PIN or passwords.
+
+## Who accessed the information
+
+{{ accessed_by }}
+
+## Contact us
+
+{{ contact }}
+
+You may also lodge a complaint with the Information Regulator (South Africa).
