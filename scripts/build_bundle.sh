@@ -17,6 +17,8 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
 PYTHON=${PYTHON:-python3}
+# a relative interpreter path (CI: .venv/bin/python) must keep working after the cd below
+case "$PYTHON" in /*) ;; */*) PYTHON="$(cd "$(dirname "$PYTHON")" && pwd)/$(basename "$PYTHON")" ;; esac
 UV=${UV:-$(command -v uv || true)}
 WITH_IMAGES=${WITH_IMAGES:-1}
 WITH_MSSQL_DEMO=${WITH_MSSQL_DEMO:-0}

@@ -272,7 +272,9 @@ checksums produced by the full product. The same test proves it never imports `t
   `tscope keys generate --role release --out /media/release-keys`, with a strong passphrase in
   `TSCOPE_RELEASE_KEY_PASSPHRASE` or at the prompt.
 * **Signing.** Set `RELEASE_KEY=/media/release-keys/release_signing.pem` and `RELEASE_KEY_PASSPHRASE`, then
-  run `make bundle`. CI signs tags with the `RELEASE_KEY_PEM` and `RELEASE_KEY_PASSPHRASE` secrets.
+  run `make bundle`. CI signs tags with the `RELEASE_KEY_PEM` and `RELEASE_KEY_PASSPHRASE` secrets (a `v*`
+  tag fails without them) and, after the offline install proof, keeps the signed bundle for 90 days as the
+  workflow artifact `tripline-scope-bundle-<tag>`, ready to copy to removable media.
 * **Ephemeral keys.** Without `RELEASE_KEY`, `scripts/sign_release.py` generates an **ephemeral key** in a
   new directory under the system temp dir, outside the repository, and prints a warning.
   `BUILDINFO.json` then records `"release_key": "ephemeral"`. Such bundles are for testing only.

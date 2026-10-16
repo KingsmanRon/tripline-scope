@@ -8,6 +8,8 @@ SHELL := /bin/bash
 .SHELLFLAGS := -euo pipefail -c
 PYTHON ?= python3
 UV ?= uv
+# PYTHON as a path that still works after a cd (CI passes the relative .venv/bin/python)
+PYTHON_ABS = $(if $(findstring /,$(PYTHON)),$(abspath $(PYTHON)),$(PYTHON))
 VERSION := $(shell $(PYTHON) -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
 BUNDLE ?= bundle/out/tripline-scope-$(VERSION)
 WHEELHOUSE ?= build/wheelhouse
@@ -66,7 +68,7 @@ bundle:                     ## offline installer; WITH_MSSQL_DEMO=1 adds SQL Ser
 
 bundle-verify:              ## verify the bundle's signed checksums with the stand-alone verifier
 	@echo "release key id: $$(openssl pkey -pubin -in $(BUNDLE)/release.pub -outform DER | tail -c 32 | sha256sum | cut -c1-32)"
-	cd $(BUNDLE) && PYTHONPATH=$(CURDIR)/verify/src $(PYTHON) -m tscope_verify checksums SHA256SUMS \
+	cd $(BUNDLE) && PYTHONPATH=$(CURDIR)/verify/src $(PYTHON_ABS) -m tscope_verify checksums SHA256SUMS \
 	    --sig SHA256SUMS.sig --key release.pub
 
 install-test: bundle-verify ## offline install proof: clean --network none container, then compose on an internal network
