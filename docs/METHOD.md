@@ -150,13 +150,13 @@ The leak sample is evidence, not a contact source: contact details come only fro
 
 `tscope estimate` gives a first count within minutes, labelled **preliminary**: the number of distinct valid ID
 numbers, plus distinct phonetic name and date-of-birth keys among rows without an ID that are not already carried
-by an ID row. The **lower bound** joins records into groups whenever they share *any* of: an ID number, the sound
-of the surname with the date of birth, or the sounds of both names with the year of birth — and counts the groups.
-This deliberately merges too much (it can join two different people who share those keys, and it joins one person
-who has two different ID numbers after a keying error), so the true number of people should not be below it.
-The **upper bound** splits more (exact spelling, no merging of records without an ID). On synthetic data the true
-number of people fell inside the bounds in every run, and the point estimate was about 2 % above it (see
-`bench/results/estimate_*.json`). The refined, person-level count replaces it in a later, signed version.
+by an ID row. The **upper bound** splits more (exact spelling, no merging of records without an ID), so it
+over-counts. The **lower bound** is the point estimate minus 5 % — the accuracy target for the estimate. It is
+*calibrated on synthetic data, not guaranteed*: across synthetic estates of 50 000 to 10 million rows the point
+estimate was 2.2–2.7 % above the true number of people, so the true number fell inside the range every time. We
+tested purely structural lower bounds and rejected them: counting distinct ID numbers can overshoot (one person can
+carry two valid ID numbers after a keying error), and merging records transitively on name and date keys chains
+unrelated people together in large estates (21–38 % too low at 10 million rows). The refined, person-level count replaces it in a later, signed version.
 
 ## 6. Module B scope candidates
 

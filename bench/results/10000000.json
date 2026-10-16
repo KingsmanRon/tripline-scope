@@ -1,29 +1,29 @@
 {
   "accuracy": {
-    "auto_link_pairs": 1272204,
-    "auto_link_precision": 0.9987431261024176,
-    "estimate_error_vs_final": 0.024288125592771218,
+    "auto_link_pairs": 1358600,
+    "auto_link_precision": 0.9991167378183424,
+    "estimate_error_vs_final": 0.025215451846264225,
     "estimate_error_vs_truth": 0.026778341310600785,
     "estimate_point": 1446091,
     "identity_rows": 2484324,
     "identity_rows_with_truth": 2484324,
-    "over_merged_predicted_people": 563,
-    "pairwise_precision": 0.9990474357520331,
-    "pairwise_recall": 0.9961926346385716,
-    "person_count_error": 0.0024311672229807785,
-    "person_count_signed_error": 0.0024311672229807785,
-    "predicted_people": 1411801,
+    "over_merged_predicted_people": 410,
+    "pairwise_precision": 0.9993185360483559,
+    "pairwise_recall": 0.9975440037422529,
+    "person_count_error": 0.0015244497744566973,
+    "person_count_signed_error": 0.0015244497744566973,
+    "predicted_people": 1410524,
     "predicted_segments": {
-      "adult_with_contact": 1074010,
-      "minor_flagged_no_guardian": 54691,
-      "minor_guardian_routed": 248912,
-      "no_usable_contact": 34188
+      "adult_with_contact": 1073565,
+      "minor_flagged_no_guardian": 54456,
+      "minor_guardian_routed": 248513,
+      "no_usable_contact": 33990
     },
-    "review_band_people": 12533,
-    "review_band_share": 0.0088773134457335,
-    "review_pairs": 9549,
-    "review_pairs_true_match_share": 0.6963032778301392,
-    "split_true_people": 3553,
+    "review_band_people": 6557,
+    "review_band_share": 0.004648627035059311,
+    "review_pairs": 4445,
+    "review_pairs_true_match_share": 0.6893138357705287,
+    "split_true_people": 2203,
     "true_people": 1408377,
     "truth_adults_without_contact": 34334,
     "truth_minors": 302158,
@@ -31,10 +31,10 @@
     "truth_minors_routed_to_guardian": 248432,
     "usable_rule_agrees_with_truth": 1.0
   },
-  "config_sha256": "d1d97b3280844577319c155e4bdaf8c0d3e6075570f2b35a4fa9424a0b808706",
+  "config_sha256": "3617f6e5ad0238be50daddef2f236a7d40f51c2e8a3ebd18efc944971eb9a8d2",
   "date": "2026-10-16",
   "estimate": {
-    "lower": 1391545,
+    "lower": 876391,
     "point": 1446091,
     "upper": 1630405
   },
@@ -47,50 +47,50 @@
   },
   "matcher": {
     "stats": {
-      "cluster_review_pairs": 3320,
-      "deterministic_links": 484225,
-      "over_merge_flagged_clusters": 483,
-      "pairs_auto": 1272204,
-      "pairs_guarded_non_link": 91880,
-      "pairs_review": 9549,
-      "records": 2262551,
-      "scored_pairs_above_review": 1373633,
+      "cluster_review_pairs": 2534,
+      "deterministic_links": 523412,
+      "over_merge_flagged_clusters": 346,
+      "pairs_auto": 1358600,
+      "pairs_guarded_non_link": 398410,
+      "pairs_review": 4445,
+      "records": 2301738,
+      "scored_pairs_above_review": 1761455,
       "usable_rows": 2461801
     },
     "timings_s": {
-      "classify": 2.7,
-      "cluster": 5.344,
-      "deterministic": 0.169,
-      "records": 4.55,
-      "scoring": 8.298,
-      "training": 19.468
+      "classify": 3.782,
+      "cluster": 4.86,
+      "deterministic": 0.172,
+      "records": 7.021,
+      "scoring": 9.363,
+      "training": 21.87
     }
   },
   "method_version": "scope-method/0.1.0",
   "peak_rss_mb": {
-    "estimate": 6139,
-    "extract": 6139,
-    "load": 6139,
-    "match": 6139,
-    "people": 6139,
-    "synth": 6139
+    "estimate": 6233,
+    "extract": 6233,
+    "load": 6233,
+    "match": 6233,
+    "people": 6243,
+    "synth": 6233
   },
   "rows": {
     "admissions": 10000000,
     "billing": 5000283,
     "identity_rows": 2484324,
-    "match_records": 2262551,
+    "match_records": 2301738,
     "patients": 2484024,
     "results": 12197791
   },
   "schema": "tripline.scope-bench/v1",
   "seed": 2026,
   "timings_s": {
-    "estimate": 9.58,
-    "extract": 34.9,
-    "load": 31.78,
-    "match": 40.63,
-    "people": 8.3,
-    "synth": 720.52
+    "estimate": 110.28,
+    "extract": 33.57,
+    "load": 31.71,
+    "match": 47.2,
+    "people": 8.16,
+    "synth": 673.65
   }
 }

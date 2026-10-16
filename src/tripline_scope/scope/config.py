@@ -101,7 +101,7 @@ DEFAULTS: dict = {
     ],
     "minor_age_years": 18,
     "contact": {"address_requires_postal_code": True},
-    "estimate": {"bounds": "fine_and_coarse_keys"},
+    "estimate": {"bounds": "calibrated_lower_exact_upper"},
 }
 
 
