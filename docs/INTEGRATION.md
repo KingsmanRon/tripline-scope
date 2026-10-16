@@ -17,10 +17,12 @@ could not assess.
 ### 1.1 Exposure → containment (A → B)
 
 Module B's containment advice is cross-referenced to a released Module A `exposure` report given with
-`tscope paths report --exposure-report <exposure v000N/report.json>`.
+`tscope paths report --exposure-report <exposure v000N/report.json or its version directory>`. Every
+recommendation carries `requires_hospital_authorisation: true` and `executed: false`; nothing is ever executed.
 
-* Join keys: `finding_id` (stable, keyed fingerprint), `asset.asset_id` (from the hospital's approved asset map,
-  `core.assets`), and `location.principal` for account findings. **Never a secret value**: a "rotate this
+* Join keys: `finding_id` (`AF-…`, keyed to the readiness case), `asset.asset_id` / `target_asset.asset_id` (from
+  the hospital's approved asset map, `core.assets`), and `location.principal` (+ `principal_domain`) for account
+  findings; each exposure report repeats the list under `stable_fields`. **Never a secret value**: a "rotate this
   credential" recommendation names the finding id and asset, not the credential.
 * A match is advisory ("this account was reported as over-privileged in exposure report v3, finding EXP-…").
   It is not evidence that the finding was used in the incident.
@@ -31,15 +33,25 @@ Module B's containment advice is cross-referenced to a released Module A `exposu
 
 `tscope paths scope-candidates --case C --out candidates.json` writes `tripline.scope-candidates/v1`:
 
-* per table (`database`, `table`, optional `asset_id`): `window_class` (`confirmed` | `possible` |
-  `not_assessable`), `windows`, `consequence_class`, `basis`, `accounts`, `evidence_ids`, `confidence`,
+* per table (`database`, `table`): `window_class` (`confirmed` | `possible` | `not_assessable` |
+  `none_observed` — logs covered the table and showed no access), `windows[]` (each with class, start, end, basis,
+  consequence class, account references, sessions, evidence ids, `rows_logged`, `volume_unknown`, time
+  uncertainty), `status`, `consequence_class`, `basis`, `covering_sources`, `confidence` with its reason,
   `limitations`;
 * `coverage_gaps` (missing logs, auditing-off periods, unknown time zones);
-* `scenarios.lower` (tables with confirmed windows) and `scenarios.upper` (every table in every implicated
-  database plus everything not assessable).
+* `scenarios.lower` (confirmed windows only) and `scenarios.upper` (every sensitive table over the whole window,
+  including `not_assessable` and `none_observed`; with no Module B input it is simply all tables);
+* `coverage_status` (`assessed` | `partial` | `not_assessable`), `exclusion_policy`, `operator_may_widen: true`.
+
+Account references: hospital directory accounts are named only when their domain is listed in
+`paths.directory_domains`; every other e-mail-shaped account is pseudonymised (`ACCT-…`). Staff and supplier
+accounts are not patient data, but they are kept out of reports unless the hospital chooses otherwise.
 
 `tscope scope constrain --case C --candidates candidates.json --reason "…"` records a scoping decision (who,
-when, why, input hashes) in the audit log and in the next scope report. Module C then reports:
+when, why, input hashes) in the audit log and in the next scope report (`--widen TABLE`, `--widen-all` and
+`--ignore-time-windows` record a widening; `--clear` withdraws candidates). Matching always runs on every
+extracted record; candidates only split the results into scenarios, so the full-scope count is always available.
+Module C then reports:
 
 * **candidate scope** (lower scenario): people with records in tables with confirmed access windows;
 * **full scope** (upper scenario): everyone with records in the implicated sources, including every table whose
