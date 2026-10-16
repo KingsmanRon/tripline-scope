@@ -30,7 +30,9 @@ from tripline_scope.core.errors import ConfigError
 CANDIDATES = "work/scope/candidates.json"
 DECISIONS = "work/scope/scoping_decisions.json"
 SCHEMA = "tripline.scope-candidates/v1"
-WINDOW_CLASSES = ("confirmed", "possible", "not_assessable")
+# Order = breadth when a table is listed twice. ``none_observed`` (Module B covered the table and saw no access) is
+# never part of the lower or candidate scenario, and like every other class it stays in the upper scenario.
+WINDOW_CLASSES = ("confirmed", "possible", "not_assessable", "none_observed")
 
 
 def parse(raw: bytes) -> dict:
@@ -47,7 +49,7 @@ def parse(raw: bytes) -> dict:
         if not isinstance(t, dict) or not t.get("table"):
             raise ConfigError("each candidate table needs 'database' and 'table'")
         if t.get("window_class") not in WINDOW_CLASSES:
-            raise ConfigError("window_class must be confirmed, possible or not_assessable")
+            raise ConfigError("window_class must be confirmed, possible, not_assessable or none_observed")
     return doc
 
 
