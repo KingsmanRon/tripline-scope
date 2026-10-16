@@ -436,6 +436,10 @@ def detect(text: str, rel: str) -> list[Candidate]:
         seg = text[max(ls, vs - 400): min(le, ve + 400)]
         in_conn = fam == "password" and bool(_CONN_CTX.search(seg))
         _gate_value(c, v, quoted=quoted or in_conn, code=code)
+        rest = text[ve:le].strip()
+        if c.suppressed is None and not quoted and text[ve:ve + 1] in (" ", "\t") and rest[:1] not in ("#", ";", "/") \
+                and len(re.findall(r"[A-Za-z]{2,}", rest)) >= 2:
+            c.suppressed = "value is prose, not a secret"
         if c.suppressed is None and fam == "password":
             if in_conn:
                 c.rule_id, c.family, c.confidence = "A1.db-connection-password", "db-credential", 0.9
