@@ -1,0 +1,148 @@
+# CI for Tripline Scope: lint, hashed locks, unit/packaging/acceptance tests (offline where it matters),
+# licence gate (fails on a disallowed licence) and SBOM. The bundle + offline install proof runs on main,
+# on tags and on demand. Actions are pinned by full commit SHA (resolved from the release tags named in the
+# comments with `git ls-remote`); update them deliberately.
+name: ci
+
+on:
+  push:
+    branches: [main, scope-v0]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.11.32"
+  PYTHON: .venv/bin/python
+  OTEL_SDK_DISABLED: "true"
+
+jobs:
+  lint-locks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: {python-version: "3.12"}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with: {version: "${{ env.UV_VERSION }}"}
+      - name: Dev environment from the hashed lock
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python --require-hashes -r requirements/dev.txt
+      - name: Lint
+        run: make lint
+      - name: Lock hash check (every entry pinned with == and SHA-256 hashes)
+        run: make check-locks
+      - name: Locks are up to date with pyproject.toml
+        run: |
+          make lock UV=uv
+          git diff --exit-code requirements/
+
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: {python-version: "3.12"}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with: {version: "${{ env.UV_VERSION }}"}
+      - name: Dev environment from the hashed lock
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python --require-hashes -r requirements/dev.txt
+      - name: Runtime wheelhouse (by hash) for the licence and stand-alone verifier tests
+        run: make wheelhouse UV=uv
+      - name: Allow empty network namespaces for the offline tests (scripts/run_offline.sh)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Unit, packaging and acceptance tests (Docker/PostgreSQL-binary tests excluded)
+        env:
+          TSCOPE_OFFLINE_ALLOW_USERNS: "1"
+        run: make test PYTEST_ARGS='-q -m "not docker and not slow and not postgres"'
+
+  licences-sbom:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: {python-version: "3.12"}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with: {version: "${{ env.UV_VERSION }}"}
+      - name: Dev environment from the hashed lock
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python --require-hashes -r requirements/dev.txt
+      - name: Licence gate (fails on GPL/AGPL/SSPL, LGPL without exception, unknown, telemetry SDKs)
+        run: make licences UV=uv
+      - name: CycloneDX SBOM of the runtime closure + coverage check against the lock
+        run: make sbom UV=uv
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: licences-and-sbom
+          path: |
+            build/licences.json
+            build/sbom.cdx.json
+
+  bundle:
+    if: github.event_name != 'pull_request'
+    needs: [lint-locks, test, licences-sbom]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: {python-version: "3.12"}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with: {version: "${{ env.UV_VERSION }}"}
+      - name: Dev environment from the hashed lock
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python --require-hashes -r requirements/dev.txt
+      - name: Base images (build machine only; the bundle carries them to the hospital)
+        run: |
+          docker pull "$(sed -n 's/^ARG PYTHON_IMAGE=//p' Dockerfile)"
+          docker pull mirror.gcr.io/library/postgres:16
+      - name: Release key (tags only; otherwise an ephemeral key outside the workspace)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASE_KEY_PEM: ${{ secrets.RELEASE_KEY_PEM }}
+        run: |
+          if [ -z "$RELEASE_KEY_PEM" ]; then
+            echo "::error::a release tag needs the RELEASE_KEY_PEM and RELEASE_KEY_PASSPHRASE secrets (docs/SUPPLY_CHAIN.md)"
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$RELEASE_KEY_PEM" > "$RUNNER_TEMP/release_signing.pem"
+          echo "RELEASE_KEY=$RUNNER_TEMP/release_signing.pem" >> "$GITHUB_ENV"
+      - name: Offline bundle
+        env:
+          RELEASE_KEY_PASSPHRASE: ${{ secrets.RELEASE_KEY_PASSPHRASE }}
+        run: make bundle UV=uv
+      - name: Verify the bundle and prove the offline install (clean --network none container + internal compose network)
+        run: make install-test
+      - name: Remove the release key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release_signing.pem"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bundle-manifest
+          path: |
+            bundle/out/*/SHA256SUMS
+            bundle/out/*/SHA256SUMS.sig
+            bundle/out/*/release.pub
+            bundle/out/*/BUILDINFO.json
+            bundle/out/*/sbom.cdx.json
+            bundle/out/*/licences.json
+      - name: Release bundle (tags only) for transfer to the hospital on removable media
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tripline-scope-bundle-${{ github.ref_name }}
+          path: bundle/out/
+          retention-days: 90
+          compression-level: 0

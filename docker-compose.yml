@@ -1,0 +1,98 @@
+# Tripline Scope services (container mode). Copy compose.env.example to .env next to this file and edit it.
+#
+#   docker compose up -d postgres                      PostgreSQL 16 for local restores of PostgreSQL dumps
+#   docker compose run --rm tscope <command> ...       the tscope CLI inside the application container
+#   docker compose --profile demo up -d mssql          SQL Server Developer Edition: SYNTHETIC DEMOS AND TESTS ONLY
+#
+# Nothing here reaches the internet: images are loaded from the offline bundle (docker load) and the product
+# makes no outbound connections. For air-gapped operation set TSCOPE_NETWORK_INTERNAL=true: the backend
+# network then has no route off the host at all (published ports are disabled too, so use container mode).
+name: tripline-scope
+
+x-hardening: &hardening
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: local              # logs stay on this host, rotated; nothing is shipped anywhere
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  postgres:
+    <<: *hardening
+    image: ${TSCOPE_POSTGRES_IMAGE:-mirror.gcr.io/library/postgres:16}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${TSCOPE_PG_USER:-tripline}
+      POSTGRES_PASSWORD: ${TSCOPE_PG_PASSWORD:?set TSCOPE_PG_PASSWORD in .env}
+      POSTGRES_DB: ${TSCOPE_PG_DB:-restores}
+      POSTGRES_INITDB_ARGS: "--data-checksums --auth-host=scram-sha-256"
+    # Never write SQL text (which may contain patient values) to the server log.
+    command: ["postgres", "-c", "password_encryption=scram-sha-256", "-c", "log_statement=none",
+              "-c", "log_min_error_statement=panic", "-c", "log_min_duration_statement=-1",
+              "-c", "log_error_verbosity=terse"]
+    volumes:
+      # Restored copies live on this named volume. Put it on an encrypted volume: either keep Docker's
+      # data-root on LUKS/BitLocker-backed storage, or bind it to an encrypted mount, e.g.
+      #   pgdata: {driver: local, driver_opts: {type: none, o: bind, device: /srv/encrypted/tripline-pgdata}}
+      - pgdata:/var/lib/postgresql/data
+      - ${TSCOPE_RESTORE_INBOX:-./restore-inbox}:/restore-inbox:ro
+    ports:
+      - "${TSCOPE_PG_BIND:-127.0.0.1}:${TSCOPE_PG_PORT:-5432}:5432"
+    networks: [backend]
+    shm_size: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  tscope:
+    <<: *hardening
+    image: ${TSCOPE_IMAGE:-tripline-scope:0.1.0}
+    profiles: ["cli"]          # started with `docker compose run --rm tscope ...`
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    tmpfs: ["/tmp:size=256m,mode=1777"]
+    environment:
+      TSCOPE_HOME: /var/lib/tripline
+      OTEL_SDK_DISABLED: "true"
+      # Restore target for PostgreSQL dumps (installation config read by `tscope ingest`).
+      TSCOPE_PG_HOST: postgres
+      TSCOPE_PG_PORT: "5432"
+      TSCOPE_PG_USER: ${TSCOPE_PG_USER:-tripline}
+      TSCOPE_PG_PASSWORD: ${TSCOPE_PG_PASSWORD:?set TSCOPE_PG_PASSWORD in .env}
+    volumes:
+      - tscope-home:/var/lib/tripline                 # installation home: users, keystore, signing keys
+      - ${TSCOPE_CASES_DIR:-./cases}:/cases           # case directories (encrypted working data, signed reports)
+      - ${TSCOPE_SOURCES_DIR:-./sources}:/sources:ro  # originals, mounted read-only
+      - ${TSCOPE_KEK_DIR:-./kek}:/kek                 # hospital KEK (removable media or service-account path)
+    networks: [backend]
+
+  # SQL Server Developer Edition is licensed for development, test and demonstration only. Use it ONLY for
+  # the synthetic demo and tests. Real cases restore .bak files to a SQL Server instance the hospital
+  # provides and licenses (typically its existing restore/test server). Starting it requires accepting the
+  # Microsoft EULA explicitly: TSCOPE_MSSQL_ACCEPT_EULA=Y.
+  mssql:
+    <<: *hardening
+    profiles: ["demo"]
+    image: ${TSCOPE_MSSQL_IMAGE:-mcr.microsoft.com/mssql/server:2022-latest}
+    environment:
+      ACCEPT_EULA: ${TSCOPE_MSSQL_ACCEPT_EULA:-N}
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${TSCOPE_MSSQL_SA_PASSWORD:-}
+    volumes:
+      - mssql-demo-data:/var/opt/mssql
+      - ${TSCOPE_DEMO_BAK_DIR:-./demo-bak}:/var/opt/mssql/backup:ro
+    ports:
+      - "${TSCOPE_MSSQL_BIND:-127.0.0.1}:${TSCOPE_MSSQL_PORT:-1433}:1433"
+    networks: [backend]
+    mem_limit: 4g
+
+networks:
+  backend:
+    internal: ${TSCOPE_NETWORK_INTERNAL:-false}
+
+volumes:
+  pgdata:
+  tscope-home:
+  mssql-demo-data:

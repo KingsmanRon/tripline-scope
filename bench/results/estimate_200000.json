@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-16",
+  "estimate": {
+    "lower": 27383,
+    "point": 28825,
+    "upper": 32493
+  },
+  "estimate_error_vs_truth": 0.022126874933512997,
+  "estimate_path_s": 2.81,
+  "hardware": {
+    "cpu_model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpus": 4,
+    "memory_gb": 15.7,
+    "platform": "Linux-6.18.44-fc-v139-x86_64-with-glibc2.39",
+    "shared_machine_note": "measured on a development machine shared with other workloads"
+  },
+  "method_version": "scope-method/0.1.0",
+  "note": "load + estimate is the preliminary-estimate path after ingest; synth and extract stand in for ingest.",
+  "peak_rss_mb": {
+    "estimate": 459,
+    "extract": 219,
+    "load": 459
+  },
+  "rows": {
+    "admissions": 200000,
+    "billing": 100091,
+    "patients": 49612,
+    "results": 244740
+  },
+  "schema": "tripline.estimate-bench/v1",
+  "timings_s": {
+    "estimate": 0.54,
+    "extract": 1.97,
+    "load": 2.27
+  },
+  "true_people": 28201,
+  "truth_within_bounds": true
+}

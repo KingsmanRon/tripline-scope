@@ -1,0 +1,4 @@
+# First-party packages built from this repository, never resolved from PyPI.
+# This entry satisfies the "tripline-scope-verify" requirement in pyproject.toml while locking; the package is
+# then excluded from the lock output (--no-emit-package) and the bundle pins its locally built wheel by hash.
+./verify

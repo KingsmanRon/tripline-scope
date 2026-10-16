@@ -1,0 +1,96 @@
+{
+  "accuracy": {
+    "auto_link_pairs": 135969,
+    "auto_link_precision": 0.9994998860034272,
+    "estimate_error_vs_final": 0.02585050430486844,
+    "estimate_error_vs_truth": 0.026732307517440292,
+    "estimate_point": 144529,
+    "identity_rows": 248423,
+    "identity_rows_with_truth": 248423,
+    "over_merged_predicted_people": 17,
+    "pairwise_precision": 0.9996503356204823,
+    "pairwise_recall": 0.9987743834690676,
+    "person_count_error": 0.0008595825696546041,
+    "person_count_signed_error": 0.0008595825696546041,
+    "predicted_people": 140887,
+    "predicted_segments": {
+      "adult_with_contact": 107474,
+      "minor_flagged_no_guardian": 5395,
+      "minor_guardian_routed": 24733,
+      "no_usable_contact": 3285
+    },
+    "review_band_people": 213,
+    "review_band_share": 0.0015118499222781378,
+    "review_pairs": 153,
+    "review_pairs_true_match_share": 0.5686274509803921,
+    "split_true_people": 120,
+    "true_people": 140766,
+    "truth_adults_without_contact": 3333,
+    "truth_minors": 30104,
+    "truth_minors_flagged_no_guardian": 5338,
+    "truth_minors_routed_to_guardian": 24766,
+    "usable_rule_agrees_with_truth": 1.0
+  },
+  "config_sha256": "3617f6e5ad0238be50daddef2f236a7d40f51c2e8a3ebd18efc944971eb9a8d2",
+  "date": "2026-10-16",
+  "estimate": {
+    "lower": 131974,
+    "point": 144529,
+    "upper": 162978
+  },
+  "hardware": {
+    "cpu_model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpus": 4,
+    "memory_gb": 15.7,
+    "platform": "Linux-6.18.44-fc-v139-x86_64-with-glibc2.39",
+    "shared_machine_note": "measured on a development machine shared with other workloads"
+  },
+  "matcher": {
+    "stats": {
+      "cluster_review_pairs": 85,
+      "deterministic_links": 52320,
+      "over_merge_flagged_clusters": 13,
+      "pairs_auto": 135969,
+      "pairs_guarded_non_link": 33948,
+      "pairs_review": 153,
+      "records": 230101,
+      "scored_pairs_above_review": 170070,
+      "usable_rows": 246170
+    },
+    "timings_s": {
+      "classify": 0.908,
+      "cluster": 0.888,
+      "deterministic": 0.053,
+      "records": 1.216,
+      "scoring": 1.271,
+      "training": 12.825
+    }
+  },
+  "method_version": "scope-method/0.1.0",
+  "peak_rss_mb": {
+    "estimate": 2042,
+    "extract": 2042,
+    "load": 2042,
+    "match": 2042,
+    "people": 2042,
+    "synth": 2042
+  },
+  "rows": {
+    "admissions": 1000000,
+    "billing": 499833,
+    "identity_rows": 248423,
+    "match_records": 230101,
+    "patients": 248123,
+    "results": 1219983
+  },
+  "schema": "tripline.scope-bench/v1",
+  "seed": 2026,
+  "timings_s": {
+    "estimate": 12.56,
+    "extract": 6.47,
+    "load": 6.32,
+    "match": 17.27,
+    "people": 1.05,
+    "synth": 82.81
+  }
+}
