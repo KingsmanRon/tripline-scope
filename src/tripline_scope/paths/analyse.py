@@ -1062,7 +1062,8 @@ class Analysis:
             units = per_table_units.get(k, [])
             windows = []
             # observed windows: cluster events of this table by time
-            pts = sorted((u["tables"][k]["first"], u["tables"][k]["last"], u) for u in units if u["tables"][k]["first"])
+            pts = sorted(((u["tables"][k]["first"], u["tables"][k]["last"], u) for u in units if u["tables"][k]["first"]),
+                         key=lambda x: (x[0], x[1], x[2]["unit_id"]))
             gap = _td(self.corr["session_gap_s"])
             cur = None
             for a, b, u in pts:
