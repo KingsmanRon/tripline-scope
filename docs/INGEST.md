@@ -54,8 +54,9 @@ restore_targets:
     data_dir: /var/opt/mssql/data     # optional; default: the instance default data path
     log_dir: /var/opt/mssql/log       # optional; default: data_dir, else the instance default
     container: mssql-test             # docker_cp only
-    encryption: false                 # TDS encryption needs pyOpenSSL, which this bundle does not ship
-    trust_server_certificate: true
+    encryption: true                  # TLS for the whole session (login and data)
+    tls_cafile: /etc/tscope/mssql-ca.pem  # required with encryption: the CA that issued the server certificate
+    trust_server_certificate: false   # true skips only the host-name check; the CA chain is always verified
     database_prefix: tscope_          # optional; restored name = <prefix><case>_<source>
     login_timeout_s: 15               # optional
   postgres:
@@ -344,8 +345,10 @@ Discovery is regression-tested against the five column-naming styles (A–E) of 
 
 ## 12. Known limitations
 
-* TDS (SQL Server) encryption needs pyOpenSSL, which the bundle does not ship: keep restore and live SQL Server
-  connections on an isolated network segment, or add pyOpenSSL (Apache-2.0) and set `encryption: true`.
+* SQL Server TLS (`encryption: true`) always verifies the certificate chain against `tls_cafile`; there is no
+  "accept any certificate" mode. Host names are matched per RFC 6125 (DNS/IP subject alternative names, left-most
+  wildcard, common name only when there are no SANs). With `encryption: false` (the TDS default) the login packet is
+  still TLS-protected only if the server forces encryption, so keep such connections on an isolated segment.
 * Value-only name detection is not attempted (no name dictionaries): name columns need a recognisable name hint
   or an override. Bank accounts need a bank name hint.
 * Tables without a primary key are ordered by every orderable column; rows that are identical in all orderable

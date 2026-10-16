@@ -127,3 +127,20 @@ def test_hash_tokens_are_not_identifiers():
     assert "8001015009087" not in scrub_text(f"{h} 8001015009087")
     # a short hex-ish token is not treated as a hash
     assert "card" in find_identifier_like("a4111111111111111b")
+
+
+def test_own_opaque_references_are_not_identifiers():
+    """ACCT-/PATH-/ANOM-… refs are keyed or hashed hex; an all-decimal one (0821234567) must not read as a phone."""
+    from tripline_scope.core.redact import find_identifier_like, scrub_text
+    from tripline_scope.paths.util import stable_id
+
+    for ref in ("ACCT-0821234567", "PATH-082123456789", "ANOM-0611234567ab", "E-071234567890", "dn:0821234567ab",
+                "file:evtx:0821234567890123", "file:-:4111111111111111", "0821234567abcdef", "0821234567abcdef01234567"):
+        assert find_identifier_like(f"account_ref,{ref},x") == [], ref
+        assert scrub_text(f"seen {ref};{ref}") == f"seen {ref};{ref}"
+    ids = [stable_id(p, i) for p in ("PATH", "ANOM", "E", "GAP", "CLM", "IM", "REC") for i in range(3000)]
+    assert [i for i in ids if find_identifier_like(i)] == []
+    # the same digits are still a phone without the exact prefix + length, or next to a real one
+    assert "phone" in find_identifier_like("TEL-0821234567")
+    assert "phone" in find_identifier_like("ACCT 0821234567")  # not the ACCT- form
+    assert "phone" in find_identifier_like("ACCT-0821234567 082 555 1234")

@@ -19,6 +19,7 @@ deletes or moves files, revokes access or patches. Findings describe exposure co
 tscope exposure synth --out DIR [--variant baseline|fixed]      # synthetic inputs (tests, drills, demo)
 tscope exposure catalog-sql --engine mssql|postgres [--out F]   # read-only catalogue queries for the DBA
 tscope exposure collect-catalog --engine ... --host --port --user --database --out F   # optional, metadata-only login
+#   SQL Server TLS: --tls-cafile CA.pem [--trust-server-certificate]   (encrypts; CA chain always verified)
 tscope exposure scan   --case CASE --inputs manifest.yaml       # operator; encrypted results in work/exposure/
 tscope exposure report --case CASE [--no-pdf]                   # operator; ranked JSON/PDF draft
 tscope release --kind exposure --case CASE --approver IO        # Information Officer signs an immutable version

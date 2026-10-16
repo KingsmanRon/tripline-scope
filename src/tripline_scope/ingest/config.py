@@ -13,8 +13,9 @@ These live in the installation ``config.yaml`` (never in ``case.yaml``)::
         host_backup_dir: /srv/evidence       # shared_path: where this host sees the same files
         container: mssql-test                # docker_cp only
         data_dir: /var/opt/mssql/data        # where restored data/log files go (default: server default)
-        encryption: false                    # TDS encryption (needs pyOpenSSL, not in this bundle)
-        trust_server_certificate: true
+        encryption: true                     # TLS for the whole session (recommended)
+        tls_cafile: /etc/tripline/restore-ca.pem   # CA (or server certificate) the server's certificate must chain to
+        trust_server_certificate: false      # true = skip host-name check (certificate is still verified)
         database_prefix: tscope_             # restored database = <prefix><case>_<source>
       postgres:
         host: 127.0.0.1
@@ -133,7 +134,7 @@ class Target:
 
 _COMMON = {"host", "port", "login", "password_env", "database_prefix", "login_timeout_s"}
 _MSSQL_KEYS = _COMMON | {"backup_transfer", "server_backup_dir", "host_backup_dir", "container", "data_dir",
-                         "log_dir", "encryption", "trust_server_certificate"}
+                         "log_dir", "encryption", "trust_server_certificate", "tls_cafile"}
 _PG_KEYS = _COMMON | {"bin_dir", "maintenance_db", "tls", "tls_cafile"}
 _LIVE_KEYS = {"engine", "host", "port", "login", "password_env", "login_timeout_s", "encryption",
               "trust_server_certificate", "tls", "tls_cafile", "maintenance_db"}
@@ -161,6 +162,9 @@ def _check_common(raw: dict, where: str) -> None:
     for b in ("encryption", "trust_server_certificate", "tls"):
         if b in raw and not isinstance(raw[b], bool):
             raise ConfigError(f"{where}.{b} must be true or false")
+    if raw.get("encryption") and not raw.get("tls_cafile"):
+        raise ConfigError(f"{where}.encryption needs tls_cafile: the CA (or server certificate) to verify the SQL Server "
+                          "against; encryption without verification is not offered")
 
 
 def _check_path(raw: dict, key: str, where: str, *, required: bool = False) -> None:
@@ -194,6 +198,7 @@ def mssql_target(home) -> Target:
     _check_path(raw, "host_backup_dir", where, required=transfer == "shared_path")
     _check_path(raw, "data_dir", where)
     _check_path(raw, "log_dir", where)
+    _check_path(raw, "tls_cafile", where)
     if transfer == "docker_cp":
         c = raw.get("container")
         if not isinstance(c, str) or not re.match(r"^[A-Za-z0-9][A-Za-z0-9_.\-]{0,127}$", c):
@@ -204,6 +209,7 @@ def mssql_target(home) -> Target:
                   container=raw.get("container"), data_dir=raw.get("data_dir"), log_dir=raw.get("log_dir"),
                   encryption=bool(raw.get("encryption", False)),
                   trust_server_certificate=bool(raw.get("trust_server_certificate", False)),
+                  tls_cafile=raw.get("tls_cafile"),
                   database_prefix=raw.get("database_prefix", "tscope_"),
                   login_timeout_s=int(raw.get("login_timeout_s", 15)))
 

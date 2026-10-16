@@ -93,6 +93,51 @@ def test_review_server_binds_localhost_only(queued, monkeypatch):
     assert seen == {"host": "127.0.0.1", "port": 8799, "ran": True}
 
 
+def test_review_page_live_server(queued):
+    """`tscope scope review` as a real process: binds 127.0.0.1 only, sign-in works, other Host headers refused."""
+    import os
+    import socket
+    import subprocess
+    import sys
+    import time
+
+    import httpx
+
+    case, store, keys = queued
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    testing.login("rami")
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(p for p in sys.path if p))
+    proc = subprocess.Popen([sys.executable, "-m", "tripline_scope", "scope", "review"] + c(case.root)
+                            + ["--port", str(port)], env=env, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True)
+    try:
+        base = f"http://127.0.0.1:{port}"
+        for _ in range(100):
+            try:
+                httpx.get(base + "/", timeout=1)
+                break
+            except httpx.TransportError:
+                assert proc.poll() is None, proc.communicate()[1]
+                time.sleep(0.1)
+        listening = subprocess.run(["ss", "-ltnH", f"sport = :{port}"], capture_output=True, text=True).stdout
+        if listening.strip():  # local-address column of every listening socket on this port
+            assert {line.split()[3] for line in listening.splitlines()} == {f"127.0.0.1:{port}"}
+        with httpx.Client(base_url=base, timeout=5) as client:
+            assert _login(client, "rami").status_code == 303
+            page = client.get("/")
+            assert page.status_code == 200 and "Content-Security-Policy" in page.headers
+            item = client.get("/api/item/0").json()
+            assert item["total"] >= 2
+            assert "Leopoldine".upper() not in str(item["left"]["id_number"]).upper()
+        assert httpx.get(base + "/", headers={"Host": "evil.example"}, timeout=5).status_code == 400
+    finally:
+        proc.terminate()
+        out, err = proc.communicate(timeout=10)
+    assert f"http://127.0.0.1:{port}/" in out
+
+
 def test_simulated_decisions_are_marked_in_the_report(queued, tmp_path):
     case, store, keys = queued
     names = list(ROWS)

@@ -248,9 +248,15 @@ def _prepare_identity(con, cfg: dict, ref: dt.date) -> None:
         tscope_sa_id_norm(guardian_sa_id) AS g_sa_id_n,
         nullif(lower(trim(language)), '') AS lang
       FROM b)
-    SELECT c.* EXCLUDE (fn0, ln0, mn0, md0, fn1, ln1, md1), c.first_tok AS first, c.fn1 AS first_disp, c.ln1 AS last_disp,
+    SELECT c.* EXCLUDE (fn0, ln0, mn0, md0, fn1, ln1, md1,
+                        -- raw values already normalised above: not carried (memory at tens of millions of rows)
+                        first_name, last_name, full_name, middle_names, maiden_name, sa_id, passport_no, sex,
+                        medical_aid_no, phone, phone_alt, email, language, guardian_phone, guardian_email,
+                        guardian_sa_id, first_tok),
+           c.first_tok AS first, c.fn1 AS first_disp, c.ln1 AS last_disp,
            coalesce(v.canon, c.first_tok) AS first_c
     FROM c LEFT JOIN name_variants v ON v.name = c.first_tok""")
+    con.execute("DROP TABLE ident_raw")  # free the raw copy before the final table is built
     con.execute(f"""
     CREATE TABLE ident AS
     WITH d AS (
@@ -284,7 +290,6 @@ def _prepare_identity(con, cfg: dict, ref: dt.date) -> None:
     FROM d
     ORDER BY row_id""")
     con.execute("DROP TABLE ident1")
-    con.execute("DROP TABLE ident_raw")
 
 
 def _load_dependent(con, store, tables) -> None:

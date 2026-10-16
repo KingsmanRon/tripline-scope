@@ -19,13 +19,13 @@ with the reason. No timing in this document is a guarantee.
 
 | Suite | Command | Result |
 |---|---|---|
-| Everything (incl. Docker/SQL Server and PostgreSQL integration) | `pytest -q tests` | **384 passed, 3 skipped** (the 3 are opt-in `-m slow` ingest benchmarks), 9 min 05 s |
+| Everything (incl. Docker/SQL Server and PostgreSQL integration) | `pytest -q tests` | **390 passed, 3 skipped** (the 3 are opt-in `-m slow` ingest benchmarks). Full run: 385 passed in 9 min 47 s; its 4 failures were packaging tests reading a bundle built before pyOpenSSL was locked, and passed (67/67) after `make bundle`; the opaque-reference test was added afterwards and passes with the 315-test non-Docker run |
 | Same, networking disabled (empty namespace, loopback only) | `make test-offline` | **374 passed**, 13 deselected (Docker-dependent and slow) |
 | Lint | `ruff check src tests verify bench demo scripts` | pass |
-| Locks pinned with hashes | `make check-locks` | pass (runtime 41, dev 79) |
-| Licence gate | `make licences` | **PASS**: 41 runtime distributions, 40 allowed, 1 by documented exception (Pillow, MIT-CMU), 0 unknown/denied |
-| SBOM | `make sbom` | PASS: CycloneDX 1.6, 42 components, every locked dependency with version, purl, SHA-256, licence |
-| Offline bundle | `make bundle && make bundle-verify` | built (495 MB) and signed checksums verified with `tscope-verify` (ephemeral release key — see §5) |
+| Locks pinned with hashes | `make check-locks` | pass (runtime 42, dev 80) |
+| Licence gate | `make licences` | **PASS**: 42 runtime distributions, 41 allowed, 1 by documented exception (Pillow, MIT-CMU), 0 unknown/denied |
+| SBOM | `make sbom` | PASS: CycloneDX 1.6, 43 components, every locked dependency with version, purl, SHA-256, licence |
+| Offline bundle | `make bundle && make bundle-verify` | built (496 MB) and signed checksums verified with `tscope-verify` (ephemeral release key — see §5) |
 | Offline install | `make install-test` | **PASS** venv mode in a clean `python:3.12-slim` container with `--network none`; **PASS** container mode on an `internal: true` compose network (1.1.1.1 and 8.8.8.8 unreachable) |
 | One-command demo, 100k rows | `demo/lab-breach/run.sh` | **PASS** in 130 s (`bench/results/demo_100k.json`) |
 | Same demo, air-gapped | `scripts/run_airgapped.sh … run_demo.py` | **PASS** in 135 s; the namespace's only route is the Docker bridge; pypi.org unreachable (`bench/results/demo_100k_airgapped.json`) |
@@ -52,6 +52,8 @@ with the reason. No timing in this document is a guarantee.
 | Access paths | all parser families; direct edges recovered; weak edges labelled inference; missing logs explicit | 37 Module B tests; native EVTX demonstrated by fixture | Pass |
 | Integration | path→scope constraints and scan→containment with provenance; never silently shrink scope; degraded mode | contract test, demo (constrain with LabDB09 `not_assessable`), degraded-mode test, real-ingest-vs-direct consistency test | Pass |
 | Licences + SBOM + RFC 8785 vectors | — | licence gate PASS; SBOM covers all; RFC 8785 Appendix B and §3.2 vectors pass | Pass |
+| SQL Server TLS | encrypted session; certificate chain and host name verified | pyOpenSSL (Apache-2.0) now bundled. Against SQL Server 2022 with a test-CA certificate: right CA + matching host → encrypted session; mismatched host → refused (accepted only with `trust_server_certificate`, which skips the host check alone); wrong CA → refused in both modes. Unit tests `tests/ingest/test_mssql_tls.py`; the server-side matrix was run by hand (needs a certificate installed in the container) | Pass |
+| Review page as a live process | binds 127.0.0.1 only; sign-in; DNS-rebinding refused | `tscope scope review` started as a subprocess: listening only on 127.0.0.1, reviewer sign-in and item fetch over real HTTP, foreign Host header → 400 (`test_review_page_live_server`) | Pass |
 | Documentation | README, METHOD, SECURITY, EXPOSURE, ACCESS_PATHS, INTEGRATION, ACCEPTANCE | all present (plus INGEST, SUPPLY_CHAIN, PLAN) | Pass |
 
 ## 4. Details for the misses and the scale runs
@@ -97,9 +99,8 @@ when one person carries two valid IDs) or far too loose at scale (transitive mer
 
 ## 5. Not done, limitations and owner decisions
 
-* **Not demonstrated:** install on a clean physical machine, VM or Hyper-V; CI on GitHub (workflow written, not run);
-  80M full run; SQL Server restore + discovery at 10M; `scope review` against a live server process (tested through
-  the ASGI test client); reviewer TOTP; provider co-signing in the demo; SQL Server TLS (needs pyOpenSSL, not bundled).
+* **Not demonstrated:** install on a clean physical machine, VM or Hyper-V;
+  80M full run; SQL Server restore + discovery at 10M; reviewer TOTP; provider co-signing in the demo.
 * **Release key:** the bundle here is signed with an ephemeral key generated outside the repository. A real release
   key must be generated off-repo and published out of band.
 * **Licence decisions for the owner:** permissive licences outside the short list in linked native code (Unicode-3.0
@@ -107,6 +108,10 @@ when one person carries two valid IDs) or far too loose at scale (transitive mer
   Pillow/pyarrow/splink assets); reportlab's wheel ships an unused GPL sample font and unlicensed Adobe/Monotype fonts
   (the installers delete them; the wheel itself is unmodified); DuckDB's vendored code notices and OpenSSL's notice in
   cryptography need confirming. The product's own licence in `pyproject.toml` is a placeholder.
+* **CI on GitHub** runs lint/locks, licences/SBOM, the non-Docker tests and the bundle. Two failures found there
+  were fixed: the bundle step's `docker image inspect` template broke on newer Docker, and the paths report's leak
+  guard occasionally refused a timeline because a keyed account reference (`ACCT-` + 10 hex) happened to be all
+  digits and read as a phone number; Tripline's own opaque references are now recognised (`core/redact.py`).
 * **Synthetic data only.** Error rates are measured on synthetic data shaped like hospital data; real data will differ.
   Name detection relies on column-name hints (no name dictionary); only the last full backup set in a `.bak` is
   restored; pgAudit `log_rows` positions and Entra CSV column names follow public documentation, not vendor files.

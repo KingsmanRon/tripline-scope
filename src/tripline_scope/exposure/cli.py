@@ -125,6 +125,12 @@ def cmd_catalog_sql(args):
         print(text)
 
 
+def _tls_args(args) -> dict:
+    if args.engine != "mssql" or not args.tls_cafile:
+        return {}
+    return {"encryption": True, "tls_cafile": args.tls_cafile, "trust_server_certificate": args.trust_server_certificate}
+
+
 def cmd_collect(args):
     from tripline_scope.core.home import get_secret
 
@@ -132,7 +138,7 @@ def cmd_collect(args):
 
     pw = get_secret(f"Password for metadata login {args.user}", args.password_env)
     doc = collect(args.engine, host=args.host, port=args.port, user=args.user, password=pw, database=args.database,
-                  timeout_s=args.timeout, max_rows=args.max_rows)
+                  timeout_s=args.timeout, max_rows=args.max_rows, **_tls_args(args))
     out = Path(args.out)
     fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as fh:
@@ -202,6 +208,8 @@ def register(sub) -> None:
     p.add_argument("--password-env", default="TSCOPE_CATALOG_PASSWORD")
     p.add_argument("--timeout", type=int, default=30)
     p.add_argument("--max-rows", type=int, default=200_000)
+    p.add_argument("--tls-cafile", help="SQL Server: encrypt and verify the server against this CA/certificate")
+    p.add_argument("--trust-server-certificate", action="store_true", help="SQL Server: skip the host-name check")
     p.add_argument("--out", required=True)
     p.set_defaults(func=cmd_collect)
     p = e.add_parser("synth", help="write synthetic Module A inputs (tests, drills, demo)")

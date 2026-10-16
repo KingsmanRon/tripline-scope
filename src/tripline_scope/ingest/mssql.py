@@ -54,20 +54,63 @@ def _safe_server_path(p: str) -> str:
     return p
 
 
+def _cert_matches_host(cert, name: bytes) -> bool:
+    """RFC 6125 host check with ``cryptography``: DNS subject-alt-names (left-most ``*`` wildcard only) and IP
+    subject-alt-names; the subject CN is used only when the certificate has no subject-alt-name extension.
+    Replaces python-tds's check, which calls a pyOpenSSL API removed in current pyOpenSSL releases."""
+    import ipaddress
+
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+
+    host = name.decode("ascii", "replace").strip().rstrip(".").lower()
+    c = cert.to_cryptography()
+    try:
+        san = c.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    except x509.ExtensionNotFound:
+        san = None
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+    if san is not None:
+        if ip is not None:
+            return ip in san.get_values_for_type(x509.IPAddress)
+        for dns in san.get_values_for_type(x509.DNSName):
+            d = dns.lower().rstrip(".")
+            if d == host:
+                return True
+            if d.startswith("*.") and "." in host and host.split(".", 1)[1] == d[2:] and "*" not in d[2:]:
+                return True
+        return False
+    cns = c.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+    return ip is None and any(str(a.value).lower().rstrip(".") == host for a in cns)
+
+
+def tls_kwargs(encryption: bool, cafile: str | None, trust_server_certificate: bool) -> dict:
+    """python-tds TLS options. Encryption always verifies the server certificate against ``cafile``;
+    ``trust_server_certificate`` only relaxes the host-name check."""
+    if not encryption:
+        return {}
+    from pytds import tls
+
+    if not tls.OPENSSL_AVAILABLE:
+        raise ConfigError("encryption: true needs pyOpenSSL (bundled from v0.1.0); reinstall from the bundle")
+    if not cafile:
+        raise ConfigError("encryption: true needs tls_cafile (the CA or server certificate to verify against)")
+    tls.validate_host = _cert_matches_host
+    return {"cafile": str(cafile), "validate_host": not trust_server_certificate, "enc_login_only": False}
+
+
 def connect(target: Target, database: str = "master", *, timeout: float | None = 300, readonly: bool = False):
     import pytds
 
-    if target.encryption:
-        from pytds import tls
-
-        if not tls.OPENSSL_AVAILABLE:
-            raise ConfigError("encryption: true needs pyOpenSSL for python-tds, which this bundle does not ship; "
-                              "keep the restore server on an isolated segment or add pyOpenSSL (Apache-2.0)")
+    tls_opts = tls_kwargs(target.encryption, target.tls_cafile, target.trust_server_certificate)
     try:
         return pytds.connect(dsn=target.host, port=target.port, database=database, user=target.login,
                              password=target.password(), autocommit=True, login_timeout=target.login_timeout_s,
                              timeout=timeout, appname=APP_NAME, readonly=readonly, bytes_to_unicode=True,
-                             disable_connect_retry=True)
+                             disable_connect_retry=True, **tls_opts)
     except Exception as exc:  # noqa: BLE001 - never echo driver messages (may include host/login)
         raise ConfigError(f"cannot connect to the SQL Server {target.name} target ({type(exc).__name__})") from None
 

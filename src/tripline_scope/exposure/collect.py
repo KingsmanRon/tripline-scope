@@ -124,11 +124,15 @@ def collect_postgres(*, host, port, user, password, database, timeout_s=30, max_
         conn.close()
 
 
-def collect_mssql(*, host, port, user, password, database, timeout_s=30, max_rows=200_000) -> dict:
+def collect_mssql(*, host, port, user, password, database, timeout_s=30, max_rows=200_000,
+                  encryption=False, tls_cafile=None, trust_server_certificate=False) -> dict:
     import pytds
 
+    from tripline_scope.ingest.mssql import tls_kwargs
+
     conn = pytds.connect(dsn=host, port=int(port), user=user, password=password, database=database,
-                         login_timeout=timeout_s, timeout=timeout_s, autocommit=True, appname="tripline-exposure-metadata")
+                         login_timeout=timeout_s, timeout=timeout_s, autocommit=True, appname="tripline-exposure-metadata",
+                         **tls_kwargs(encryption, tls_cafile, trust_server_certificate))
     try:
         cur = conn.cursor()
         cur.execute("SET LOCK_TIMEOUT 5000")

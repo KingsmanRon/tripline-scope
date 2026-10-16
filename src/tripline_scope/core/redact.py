@@ -14,11 +14,18 @@ _DIGIT_RUN = re.compile(r"(?<![0-9])(?:\d[\s\-]?){12,18}\d(?![0-9])")
 _EMAIL = re.compile(r"[A-Za-z0-9._%+'\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 _PHONE = re.compile(r"(?<![0-9A-Za-z])(?:\+27|0027|\b0)[\s\-]?[1-8](?:[\s\-]?\d){8}(?![0-9])")
 _SECRETISH = re.compile(r"(?i)(password|pwd|secret|token|api[_-]?key)\s*[=:]\s*[^\s;,'\"]+")
-# A maximal hex token of digest length (MD5/SHA-1/SHA-256/SHA-512) containing at least one a-f letter is a hash:
-# decimal runs inside it only resemble IDs, cards or phone numbers by coincidence (about 0.15% of SHA-256 values).
+# A maximal hex token of digest length (MD5/SHA-1/SHA-256/SHA-512, and the 24/16-hex key ids and file refs)
+# containing at least one a-f letter is a hash: decimal runs inside it only resemble IDs, cards or phone numbers by
+# coincidence (about 0.15% of SHA-256 values).
 _HASH_TOKEN = re.compile(
-    r"(?<![0-9A-Za-z])(?=[0-9a-fA-F]*[a-fA-F])(?:[0-9a-fA-F]{128}|[0-9a-fA-F]{64}|[0-9a-fA-F]{40}|[0-9a-fA-F]{32})"
-    r"(?![0-9A-Za-z])")
+    r"(?<![0-9A-Za-z])(?=[0-9a-fA-F]*[a-fA-F])"
+    r"(?:[0-9a-fA-F]{128}|[0-9a-fA-F]{64}|[0-9a-fA-F]{40}|[0-9a-fA-F]{32}|[0-9a-fA-F]{24}|[0-9a-fA-F]{16})"
+    r"(?![0-9A-Za-z])"
+    # Tripline's own opaque references: pseudonymous accounts (ACCT- + 10 hex of a keyed fingerprint), Module B
+    # ids (paths.util.stable_id: PREFIX- + 12 hex) and keyed directory-member and file refs (dn:…, file:ext:…).
+    # Their hex part is all decimal now and then (e.g. ACCT-0821234567) and would otherwise read as a phone number.
+    r"|(?<![0-9A-Za-z])(?:ACCT-[0-9a-f]{10}|(?:ANOM|CLM|E|GAP|IM|PATH|REC)-[0-9a-f]{12}|dn:[0-9a-f]{12}"
+    r"|file:[0-9A-Za-z.\-]{0,16}:[0-9a-f]{16})(?![0-9A-Za-z])")
 
 REDACTED = "[redacted]"
 
@@ -40,7 +47,7 @@ def _scrub_segment(text: str) -> str:
 def scrub_text(text: str | None) -> str:
     """Remove SA-ID-like, card-like, email, SA phone and ``password=...`` patterns from free text.
 
-    Digest-shaped hex tokens (hashes) are left intact."""
+    Digest-shaped hex tokens (hashes) and Tripline's own opaque references are left intact."""
     if not text:
         return text or ""
     text = _SECRETISH.sub(lambda m: m.group(1) + "=" + REDACTED, text)

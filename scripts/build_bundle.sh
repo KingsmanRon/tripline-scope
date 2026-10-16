@@ -119,7 +119,7 @@ EOF
     {
         echo "# Container images in this bundle: reference, image id, repo digest. Load with: docker load -i FILE"
         for ref in "${saved[@]}"; do
-            docker image inspect "$ref" --format "$ref  {{.Id}}  {{join .RepoDigests \",\"}}  {{.Os}}/{{.Architecture}}"
+            docker image inspect "$ref" --format "$ref  {{.Id}}  {{range \$i, \$d := .RepoDigests}}{{if \$i}},{{end}}{{\$d}}{{end}}  {{.Os}}/{{.Architecture}}"
         done
         echo "# Base image of the app image: $(sed -n 's/^ARG PYTHON_IMAGE=//p' "$root/Dockerfile")"
         echo "# OS packages inside base images are aggregated system components, not linked into the product."
