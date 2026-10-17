@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# One-command synthetic lab-breach demo. Synthetic data only.
+# Tripline Scope — Synthetic South African Laboratory Breach Investigation (all data synthetic; not a
+# reconstruction of any real incident). One command: Module A → Module B → Module C on one case.
+#
+#   demo/lab-breach/run.sh [--scenario suspected|corroborated] [--keep-open] [--workdir DIR] [--rows N]
+#
+# Extra arguments are passed to run_demo.py (see docs/DEMO.md). ROWS, MSSQL_CONTAINER, MSSQL_PORT and
+# TSCOPE_PYTHON can be set in the environment.
 # SQL Server Developer Edition is licensed for development/test/demo use only; real cases restore to a
 # SQL Server instance the hospital provides and licenses.
 set -euo pipefail
