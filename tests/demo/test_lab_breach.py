@@ -188,10 +188,6 @@ def test_module_b_processes_generated_logs_and_cross_references_module_a(suspect
     assert all(by_id[i]["location"]["principal"] == "vendor.support" for i in refs)
 
 
-@pytest.mark.xfail(strict=True, reason="paths/containment.py matches Module A findings on a top-level 'asset_id', but "
-                   "released exposure findings carry it as 'asset.asset_id', so asset-keyed cross-references (xp_cmdshell, "
-                   "VPN-to-database routes) never resolve against a real exposure report. Module B engine fix, outside "
-                   "Workstream C; remove this marker when fixed.")
 def test_xp_cmdshell_recommendation_cross_references_the_module_a_finding_on_the_same_asset(suspected):
     xp = [f["finding_id"] for f in suspected.exposure["findings"] if f["rule_id"] == "A4.mssql-xp-cmdshell"]
     rec = [r for r in suspected.paths["containment"]["recommendations"]
