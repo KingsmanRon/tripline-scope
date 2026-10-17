@@ -98,6 +98,27 @@ the validator trusted a bundle's stated hash instead of recomputing it; dashboar
 `IM-`, `XA-` and `SCOPE-` ids. Found and documented, not changed: the encrypted-spill option is not wired into
 any module's load path (SECURITY.md §4a, runbook §3).
 
+## 3b. Pre-merge review of PR 3 — exfiltration scope, workbench integrity, review gating
+
+Three defects found in review of release 1 and fixed on the same branch; each has tests that fail on the release-1
+code and pass now.
+
+| Check | Command / evidence | Result | Status |
+|---|---|---|---|
+| Exfiltration claims limited to the exact table, data category and count the corroboration covers | `test_corroboration_of_table_a_does_not_support_exfiltration_of_table_b` (COR for `LabDB07.dbo.patients` + access path also reading `LabDB06.dbo.patients`), `test_unscoped_or_broad_exfiltration_claims_rejected`, `test_exfiltration_claim_limited_to_covered_data_categories_and_counts`, `test_fixture_exfiltration_hypothesis_names_only_the_corroborated_table` | claims about table B, uncovered categories, possible-exposure counts, "all"/"entire" or unscoped claims rejected (`exfiltration_scope`) in hypotheses, alternatives, steps, remediation and missing evidence; the scoped claim is accepted; the release-1 fixture wording is now rejected | PASS |
+| Workbench uses released data only after its chain verifies; failure refused with a warning | `tests/dashboard/test_report_integrity.py`: tampered report, tampered timeline attachment, forged release record, tampering after verification (hash-bound reads), investigator run built on a tampered report | affected kind returns `integrity_failure` with the warning, no findings, files refused (409), other kinds served, alert on every response | PASS |
+| Verification cache invalidation | `test_cache_follows_file_changes_even_when_mtime_is_restored` | same-size, same-mtime edit re-verified (ctime) and refused; restored file verified and shown again without restart; unchanged files not re-verified | PASS |
+| Signed report holds only explicitly accepted AI steps, remediation and missing-evidence items | `test_unreviewed_recommendations_are_segregated_not_approved`, `test_fully_reviewed_run_has_no_unreviewed_proposals` | accepted items in the analysis with reviewer and decision; unreviewed items segregated as NOT REVIEWED / not approved (JSON and PDF); rejected items absent; report verifies and re-renders byte-identically | PASS |
+| Whole suite | `pytest -q tests` | 534 passed, 11 skipped (Docker daemon down at start: 9; opt-in slow: 2), 14 min 29 s; then with Docker up `pytest -m docker tests`: both full demos (suspected, corroborated) and every SQL Server test passed (`test_real_ingest_matches_direct_extract` failed once with "Server closed connection" while the offline suite ran in parallel and passed alone) | PASS |
+| Same, networking disabled | `make test-offline` | **530 passed**, 15 deselected (Docker/slow), 11 min 41 s | PASS |
+| Targeted suites | `tests/investigator`, `tests/dashboard` | 69 and 60 passed | PASS |
+| Workbench in a real browser | headless Chromium, all seven sections, clean and with the paths report tampered while the server runs | no console errors or external requests; warning banner on every page and in the refused sections; restored file shown again | PASS |
+| 80M full matching | — | not re-run (out of scope for this review) | DEFERRED |
+
+Behaviour notes: an investigation report released before this change re-renders differently (the AI section's
+structure changed), so `investigator verify` reports `reproducible: false` for such a report; no such report exists
+outside test and demo cases. The validator is now `investigator-validator/1.1.0`.
+
 ## 4. Details for the misses and the scale runs
 
 ### 4.1 Review band at 10M, and the estimate's lower bound
