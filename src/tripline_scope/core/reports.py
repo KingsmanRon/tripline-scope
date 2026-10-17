@@ -30,7 +30,7 @@ from .keys import Signer
 from .redact import find_identifier_like
 from .timeutil import now_iso
 
-KINDS = {"scope", "exposure", "paths", "readiness", "datamap", "drill"}
+KINDS = {"scope", "exposure", "paths", "readiness", "datamap", "drill", "investigation"}
 _VDIR = re.compile(r"^v(\d{4,})$")
 _ATTACH = re.compile(r"^[a-z0-9][a-z0-9._-]{0,80}$")
 
