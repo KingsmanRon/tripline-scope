@@ -11,20 +11,23 @@ Scenarios (``--scenario``):
   outbound flows of unknown content follow (``egress_suspected``); LabDB07 ``results`` is read only; database
   auditing is switched off on LabDB09 (``not_assessable``). No corroboration: nothing is
   ``exfiltration_evidenced``.
-* ``acceptance`` -- ``demo`` plus a corroborated external copy of LabDB07 ``patients``
-  (``exfiltration_evidenced`` for that table only). The five access-versus-theft fixtures are: (i) ordinary
-  SELECT of LabDB01 ``results`` by a DBA, (ii) local export of LabDB05 ``billing`` with no egress, (iii)
-  LabDB03 ``patients``/``admissions`` exported then an outbound flow of unknown payload, (iv) LabDB07
-  ``patients`` corroborated external copy, (v) LabDB09 auditing disabled.
+* ``acceptance`` -- ``demo`` plus a corroborated external copy of one table, by default LabDB07 ``patients``
+  (``exfiltration_evidenced`` for that table only; ``--corroborate TABLE`` / ``corroborated_table`` chooses
+  another sensitive table -- the unified laboratory demo uses ``LabDB03.dbo.patients``, the table Module C's
+  synthetic leak sample is drawn from). The five access-versus-theft fixtures are: (i) ordinary SELECT of LabDB01
+  ``results`` by a DBA, (ii) local export of LabDB05 ``billing`` with no egress, (iii) LabDB03
+  ``patients``/``admissions`` exported then an outbound flow of unknown payload, (iv) the corroborated external
+  copy, (v) LabDB09 auditing disabled.
 
 Hard cases: mixed time zones (UTC, +02:00 offsets, SAST abbreviations, local VPN time, epoch firewall time,
 an unknown-zone source), a documented +95 s firewall clock offset, several users behind one NAT address, SQL
 rows without session ids, sign-ins with unknown MFA, a SQL session with no upstream evidence, harmless nightly
 bulk imports and a declared firewall gap.
 
-Usage: ``python -m tripline_scope.paths.synthetic --out DIR [--scenario demo|acceptance] [--scale N]``.
-Writes ``DIR/logs.yaml`` (with ``paths:`` settings incl. ``sensitive_tables``), the logs and
-``DIR/ground_truth.json``.
+Usage: ``python -m tripline_scope.paths.synthetic --out DIR [--scenario demo|acceptance] [--scale N]
+[--corroborate DB.SCHEMA.TABLE] [--attest]``. Writes ``DIR/logs.yaml`` (with ``paths:`` settings incl.
+``sensitive_tables``), the logs and ``DIR/ground_truth.json``. ``--attest`` records every written file in the
+installation's synthetic-origin registry (generator ``paths-logs``; needs ``TSCOPE_HOME`` and the KEK passphrase).
 """
 
 from __future__ import annotations
@@ -56,6 +59,8 @@ HOSPITAL_EGRESS = "41.0.0.20"
 EXFIL_DEST = "185.220.101.47"
 FW_SKEW = 95
 SQL_CMDLINE_SECRET = "Synthetic-CmdLine-Secret-7731"  # noqa: S105 - planted to prove it is never read
+DEFAULT_CORROBORATED = "LabDB07.dbo.patients"
+SENSITIVE_DB_TABLES = [f"{db}.dbo.{t}" for db in DBS for t in TABLES]
 
 
 def _uuid(rng: random.Random) -> str:
@@ -107,11 +112,17 @@ class _Sql:
 
 
 class Generator:
-    def __init__(self, out: Path, scenario: str = "acceptance", scale: int = 20_000, seed: int = 20260903):
+    def __init__(self, out: Path, scenario: str = "acceptance", scale: int = 20_000, seed: int = 20260903,
+                 corroborated_table: str | None = None):
         if scenario not in ("demo", "acceptance"):
             raise ValueError("scenario must be demo or acceptance")
+        if corroborated_table is not None and scenario != "acceptance":
+            raise ValueError("a corroborated table is part of the acceptance scenario only")
+        if corroborated_table is not None and corroborated_table not in SENSITIVE_DB_TABLES:
+            raise ValueError("corroborated table must be one of the synthetic LabDBnn.dbo.<table> tables")
         self.out = Path(out)
         self.scenario = scenario
+        self.corroborated = (corroborated_table or DEFAULT_CORROBORATED) if scenario == "acceptance" else None
         self.scale = max(2_000, int(scale))
         self.rng = random.Random(seed)  # noqa: S311 - deterministic synthetic data, not security
         self.sql = {"LABSQL01": _Sql("LABSQL01", with_rows=True), "LABSQL02": _Sql("LABSQL02", with_rows=False)}
@@ -497,8 +508,8 @@ class Generator:
             "LabDB09.dbo.results": "undetermined",
             "lis.public.patient_index": "access_observed",
         }
-        if self.scenario == "acceptance":
-            exp["LabDB07.dbo.patients"] = "exfiltration_evidenced"
+        if self.corroborated:
+            exp[self.corroborated] = "exfiltration_evidenced"
         tables.update(exp)
         T["expected_table_classes"] = exp
         T["expected_window_classes"] = {f"LabDB09.dbo.{t}": "not_assessable" for t in TABLES}
@@ -511,8 +522,8 @@ class Generator:
                                           "expected_path_class": "export_or_staging_observed"},
             "iii_outbound_unknown_payload": {"table": "LabDB03.dbo.patients", "account": a,
                                              "expected_path_class": "egress_suspected"},
-            "iv_corroborated_external_copy": {"table": "LabDB07.dbo.patients",
-                                              "expected_table_class": exp["LabDB07.dbo.patients"]},
+            "iv_corroborated_external_copy": {"table": self.corroborated or DEFAULT_CORROBORATED,
+                                              "expected_table_class": exp[self.corroborated or DEFAULT_CORROBORATED]},
             "v_auditing_disabled": {"database": "LabDB09", "expected_table_class": "undetermined",
                                     "expected_window_class": "not_assessable"},
         }
@@ -633,15 +644,16 @@ class Generator:
             w.writerow(["domain", "paste.example.org", "Partner IR firm (synthetic), report PIR-2026-117",
                         "2026-08-01T00:00:00Z", "2026-12-31T23:59:59Z", "PIR-2026-117", "paste site"])
             w.writerow(["ip", "198.51.100.77", "", "2026-08-01T00:00:00Z", "2026-12-31T23:59:59Z", "", "no provenance"])
-        if self.scenario == "acceptance":
+        if self.corroborated:
             with open(out / "evidence/leak_sample_index.csv", "w", newline="") as fh:
                 w = csv.writer(fh)
                 w.writerow(["sample_row", "matched_table"])
                 for i in range(25):
-                    w.writerow([i + 1, "LabDB07.dbo.patients"])
+                    w.writerow([i + 1, self.corroborated])
         manifest = self.manifest()
         (out / "logs.yaml").write_text(yaml.safe_dump(manifest, sort_keys=False))
         self.truth.update({"scenario": self.scenario, "window": {"start": WINDOW[0], "end": WINDOW[1]},
+                           "corroborated_table": self.corroborated,
                            "counts": counts, "total_events": sum(counts.values())})
         (out / "ground_truth.json").write_text(json.dumps(self.truth, indent=2, sort_keys=True))
         return self.truth
@@ -719,12 +731,12 @@ class Generator:
             },
             "sources": src,
         }
-        if self.scenario == "acceptance":
+        if self.corroborated:
             doc["corroborations"] = [{
                 "id": "COR-001", "kind": "independently_confirmed_external_copy", "path": "evidence/leak_sample_index.csv",
-                "evidence_role": "leak_sample", "tables": ["LabDB07.dbo.patients"],
+                "evidence_role": "leak_sample", "tables": [self.corroborated],
                 "establishes": "An external copy received through counsel contains records that the hospital's analyst "
-                               "matched to LabDB07.dbo.patients.",
+                               f"matched to {self.corroborated}.",
                 "does_not_establish": "Which route or session moved the data, when it left, or that other tables left.",
                 "observed_at": "2026-09-12T09:00:00Z"}]
         return doc
@@ -760,8 +772,9 @@ def _x(v) -> str:
     return str(v).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def generate(out: Path | str, scenario: str = "acceptance", scale: int = 20_000, seed: int = 20260903) -> dict:
-    g = Generator(Path(out), scenario, scale, seed)
+def generate(out: Path | str, scenario: str = "acceptance", scale: int = 20_000, seed: int = 20260903,
+             corroborated_table: str | None = None) -> dict:
+    g = Generator(Path(out), scenario, scale, seed, corroborated_table=corroborated_table)
     g.background()
     g.scenarios()
     return g.write()
@@ -774,10 +787,25 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--scenario", choices=["demo", "acceptance"], default="demo")
     p.add_argument("--scale", type=int, default=20_000, help="approximate number of background events")
     p.add_argument("--seed", type=int, default=20260903)
+    p.add_argument("--corroborate", metavar="TABLE", choices=SENSITIVE_DB_TABLES,
+                   help=f"table with the corroborated external copy (acceptance scenario; default {DEFAULT_CORROBORATED})")
+    p.add_argument("--attest", action="store_true",
+                   help="record every written file in the installation's synthetic-origin registry "
+                        "(needs TSCOPE_HOME and the KEK passphrase)")
     a = p.parse_args(argv)
-    truth = generate(a.out, a.scenario, a.scale, a.seed)
-    print(json.dumps({"out": str(Path(a.out).resolve()), "scenario": truth["scenario"],
-                      "total_events": truth["total_events"]}, indent=2))
+    if a.corroborate and a.scenario != "acceptance":
+        p.error("--corroborate requires --scenario acceptance")
+    truth = generate(a.out, a.scenario, a.scale, a.seed, corroborated_table=a.corroborate)
+    res = {"out": str(Path(a.out).resolve()), "scenario": truth["scenario"],
+           "corroborated_table": truth["corroborated_table"], "total_events": truth["total_events"]}
+    if a.attest:
+        from tripline_scope.core.home import Home
+        from tripline_scope.investigator.synthetic import attest_outputs
+
+        res["attested_files"] = attest_outputs(Home(), "paths-logs", {
+            "scenario": a.scenario, "scale": a.scale, "seed": a.seed, "corroborated_table": truth["corroborated_table"]},
+            [a.out])
+    print(json.dumps(res, indent=2))
     return 0
 
 

@@ -259,8 +259,15 @@ def cmd_synth(args):
     if args.threads:
         kw["threads"] = args.threads
     meta = generate(Path(args.out), args.rows, progress=(lambda m: None), **kw)
-    emit(args, {"out": str(args.out), "totals": meta["totals"], "persons": meta["population"]["persons"],
-                "seed": meta["seed"], "reference_date": meta["reference_date"]})
+    res = {"out": str(args.out), "totals": meta["totals"], "persons": meta["population"]["persons"],
+           "seed": meta["seed"], "reference_date": meta["reference_date"]}
+    if getattr(args, "attest", False):
+        from tripline_scope.investigator.synthetic import attest_outputs
+
+        res["attested_files"] = attest_outputs(home_of(args), "synth", {
+            "rows": args.rows, "seed": meta["seed"], "databases": args.databases, "leak_rows": args.leak_rows,
+            "reference_date": meta["reference_date"]}, [Path(args.out)])
+    emit(args, res)
 
 
 # ------------------------------------------------------------------------------------------------ registration
@@ -336,6 +343,9 @@ def register(sub) -> None:
     p.add_argument("--leak-rows", type=int, default=300)
     p.add_argument("--reference-date", help="date ages are computed at (default 2026-09-14)")
     p.add_argument("--threads", type=int)
+    p.add_argument("--attest", action="store_true",
+                   help="record every written file in this installation's synthetic-origin registry (needs an "
+                        "initialised installation and the KEK passphrase)")
     p.set_defaults(func=cmd_synth)
 
     from tripline_scope.readiness import drill_cli, profile_cli
