@@ -208,3 +208,120 @@ def test_main_rejected_alternatives_kept(bundle):
     assert res["analysis_status"] == "completed" and "main hypothesis did not pass" in res["status_reason"]
     assert [r["item"] for r in res["validation"]["rejections"]] == ["H1"]
     assert all(h["item_id"] != "H1" for h in res["hypotheses"])
+
+
+# ------------------------------------------------------------------------- exfiltration scope (table A vs table B)
+def _rehash(b):
+    b["bundle_sha256"] = B.bundle_hash(b)
+    return b
+
+
+def _a_and_b(bundle):
+    """Table A: covered by the eligible corroboration. Table B: only access evidence, on the same route as A."""
+    cor = [c for c in _items(bundle, "corroboration") if c["exfiltration_evidence_kind"]][0]
+    table_a = cor["tables"][0]
+    access = [p for p in _items(bundle, "path", "access_observed") if table_a in p["tables"]][0]
+    table_b = next(t for t in access["tables"] if t not in cor["tables"])
+    return cor, access, table_a, table_b
+
+
+def _exfil_hyp(bundle, support, statement, cls="exfiltration_evidenced", quantities=()):
+    return hyp(bundle, supporting_evidence=support, consequence_class=cls, contradicting_evidence=[],
+               quantities=list(quantities), assets=[], confidence="moderate", statement=statement)
+
+
+def _codes(bundle, h):
+    return run(bundle, cand_with(bundle, h))["verdicts"]["H1"]
+
+
+def test_corroboration_of_table_a_does_not_support_exfiltration_of_table_b(bundle):
+    cor, access, a, b = _a_and_b(bundle)
+    support = [cor["id"], access["id"]]
+    ok = _exfil_hyp(bundle, support, f"Records of {a} were exfiltrated, as {cor['id']} establishes; the account also "
+                                     f"read {b} through {access['id']}, where exfiltration is not established.")
+    assert _codes(bundle, ok)["verdict"] == "accepted"
+    for stmt in (
+        f"Records of {b} were exfiltrated, as {cor['id']} establishes.",                       # B alone
+        f"Exfiltration is evidenced for {a} and {b} by {cor['id']}.",                           # A and B together
+        f"Records of {a} and {b} were exfiltrated through the route in {access['id']}.",
+        f"Exfiltration is evidenced for {a} by {cor['id']}. The account read {b} through {access['id']}.",
+        f"Exfiltration is evidenced for {a} by {cor['id']}; {b} was leaked the same night.",
+        f"Records of {b} were disclosed outside the hospital through {access['id']}.",
+    ):
+        v = _codes(bundle, _exfil_hyp(bundle, support, stmt))
+        assert v["verdict"] == "rejected" and "exfiltration_scope" in v["codes"], stmt
+    # a weaker hypothesis class does not license a theft sentence about B either
+    v = _codes(bundle, _exfil_hyp(bundle, support, f"Records of {a} and {b} were exfiltrated.", cls="access_observed"))
+    assert v["verdict"] == "rejected" and "exfiltration_scope" in v["codes"]
+    # nor do alternative explanations, steps, remediation or missing-evidence entries
+    h = dict(ok, alternative_explanations=[f"Records of {b} were stolen by the same actor."])
+    assert "exfiltration_scope" in _codes(bundle, h)["codes"]
+    c = F.candidate(bundle)
+    c["investigation_steps"][0] = {"step": f"Establish how records of {b} were exfiltrated.", "priority": "next",
+                                   "evidence_ids": support}
+    c["remediation"][0]["action"] = f"Records of {b} were exfiltrated; reset the account."
+    c["remediation"][0]["evidence_ids"] = support
+    c["missing_evidence"][0] = {"description": f"Data from {b} was leaked, so collect proxy logs.",
+                                "source_family": "proxy", "related_evidence": support}
+    v = run(bundle, c)["verdicts"]
+    assert all("exfiltration_scope" in v[k]["codes"] for k in ("S1", "R1", "M1")), v
+
+
+def test_unscoped_or_broad_exfiltration_claims_rejected(bundle):
+    cor, access, a, _ = _a_and_b(bundle)
+    for stmt in (f"Patient data was exfiltrated, as {cor['id']} establishes.",
+                 f"Exfiltration is evidenced by {cor['id']}.",
+                 f"All records of {a} were exfiltrated.",
+                 f"The entire laboratory database, including {a}, was exfiltrated."):
+        v = _codes(bundle, _exfil_hyp(bundle, [cor["id"], access["id"]], stmt))
+        assert v["verdict"] == "rejected" and "exfiltration_scope" in v["codes"], stmt
+
+
+def test_exfiltration_claim_limited_to_covered_data_categories_and_counts(bundle):
+    scope = bundle["evidence"]["SCOPE-confirmed_exfiltration"]
+    assert scope["categories"] and "clinical_diagnosis" not in scope["categories"]
+    tier = bundle["facts"]["FACT-C-tier-confirmed_exfiltration"]["value"]
+    pe = bundle["facts"]["FACT-C-tier-possible_exposure"]["value"]
+    q_tier = [{"fact_id": "FACT-C-tier-confirmed_exfiltration", "value": tier}]
+    cited = ["SCOPE-confirmed_exfiltration"]
+    ok = _exfil_hyp(bundle, cited, f"Names and identity numbers of {tier} people were exfiltrated, as "
+                                   f"SCOPE-confirmed_exfiltration shows.", quantities=q_tier)
+    assert _codes(bundle, ok)["verdict"] == "accepted"
+    bad = [
+        (f"Names and diagnoses of {tier} people were exfiltrated.", q_tier),                  # uncovered category
+        (f"Clinical information of {tier} people was exfiltrated.", q_tier),                  # uncovered category group
+        (f"Names of {pe} people were exfiltrated.", [{"fact_id": "FACT-C-tier-possible_exposure", "value": pe}]),
+        ("Names of the possible-exposure population were exfiltrated.", []),                 # another tier
+    ]
+    for stmt, q in bad:
+        v = _codes(bundle, _exfil_hyp(bundle, cited, stmt, quantities=q))
+        assert v["verdict"] == "rejected" and "exfiltration_scope" in v["codes"], stmt
+    # a table corroboration establishes tables, not data categories or Module C people counts
+    cor, _, a, _ = _a_and_b(bundle)
+    v = _codes(bundle, _exfil_hyp(bundle, [cor["id"]], f"Names of {tier} people in {a} were exfiltrated.",
+                                  quantities=q_tier))
+    assert v["verdict"] == "rejected" and "exfiltration_scope" in v["codes"]
+    both = _exfil_hyp(bundle, [cor["id"], "SCOPE-confirmed_exfiltration"],
+                      f"Names of {tier} people in {a} were exfiltrated.", quantities=q_tier)
+    assert _codes(bundle, both)["verdict"] == "accepted"
+
+
+def test_fixture_exfiltration_hypothesis_names_only_the_corroborated_table(bundle):
+    cor, _, a, _ = _a_and_b(bundle)
+    b2 = copy.deepcopy(bundle)
+    for pid in [p["id"] for p in _items(b2, "path") if a not in p["tables"] or p["consequence_class"] != "egress_suspected"]:
+        del b2["evidence"][pid]             # leave the egress path that carries table A on top
+    _rehash(b2)
+    c = F.candidate(b2)
+    h1 = c["hypotheses"][0]
+    assert h1["consequence_class"] == "exfiltration_evidenced" and cor["id"] in h1["supporting_evidence"]
+    claim = h1["statement"].split(";")[0]
+    assert a in claim and not [t for t in V._TABLE.findall(claim) if t != a]
+    v = run(b2, c)
+    assert all(x["verdict"] == "accepted" for x in v["verdicts"].values()), v["verdicts"]
+    # the release-1 wording (every table on the path under one exfiltration label) is now rejected
+    top = b2["evidence"][h1["supporting_evidence"][0]]
+    old = dict(h1, statement=f"An account read sensitive tables ({', '.join(top['tables'])}) through the route shown in "
+                             f"{top['id']}; Tripline classifies the data outcome as {F.HUMAN['exfiltration_evidenced']}.")
+    c["hypotheses"][0] = old
+    assert "exfiltration_scope" in run(b2, c)["verdicts"]["H1"]["codes"]

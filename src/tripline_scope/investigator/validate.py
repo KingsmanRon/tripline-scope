@@ -9,9 +9,16 @@ investigation step, remediation action, unproven assertion, summary) receives a 
 * ``rejected``   — at least one hard rule failed (codes below). Rejected text is dropped from the result.
 
 Codes: ``schema``, ``case_mismatch``, ``bundle_mismatch``, ``unknown_evidence``, ``unknown_asset``,
-``unknown_source``, ``promotion``, ``exfiltration_unsupported``, ``missing_logs_as_absence``, ``unsupported_number``,
-``prohibited_content``, ``unsupported_conclusion``, ``confidence_label``, ``execution_claim``,
+``unknown_source``, ``promotion``, ``exfiltration_unsupported``, ``exfiltration_scope``, ``missing_logs_as_absence``,
+``unsupported_number``, ``prohibited_content``, ``unsupported_conclusion``, ``confidence_label``, ``execution_claim``,
 ``untraceable_reference`` (unverified only). Diagnostics carry codes and item ids only, never content.
+
+Exfiltration scope: eligible evidence establishes exfiltration only for what it covers (its ``tables``, data
+``categories`` and ``fact:`` references). Every sentence that asserts exfiltration, and every unqualified sentence of
+an ``exfiltration_evidenced`` hypothesis, must stay inside the scope of the eligible items the hypothesis cites: no
+other table, no other data category, no number other than a cited in-scope fact, no "all"/"entire" or population
+wording, and at least one in-scope table or category named. Otherwise the item is rejected (``exfiltration_scope``).
+Corroboration of one table plus access evidence for another therefore never supports a claim about the second.
 """
 
 from __future__ import annotations
@@ -24,10 +31,10 @@ from tripline_scope.core.redact import find_identifier_like
 
 from .schema import RESULT_SCHEMA, SchemaError, check_candidate, parse
 
-VALIDATOR_VERSION = "investigator-validator/1.0.0"
+VALIDATOR_VERSION = "investigator-validator/1.1.0"
 ORDER = ["access_observed", "export_or_staging_observed", "egress_suspected", "exfiltration_evidenced"]
 HARD = {"schema", "case_mismatch", "bundle_mismatch", "unknown_evidence", "unknown_asset", "unknown_source",
-        "promotion", "exfiltration_unsupported", "missing_logs_as_absence", "unsupported_number",
+        "promotion", "exfiltration_unsupported", "exfiltration_scope", "missing_logs_as_absence", "unsupported_number",
         "prohibited_content", "unsupported_conclusion", "confidence_label", "execution_claim"}
 
 _IPV4 = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
@@ -47,9 +54,37 @@ _MODAL = re.compile(r"(?i)\b(may|might|could|possibly|possible|whether|if|not|no
 _HEDGE = re.compile(r"(?i)\b(may|might|could|cannot|unknown|whether|if|unproven|not determinable|undetermined|unclear)\b")
 _THEFT = [
     re.compile(r"(?i)\b(?:confirmed|proven|established|definite|certain|actual)\s+(?:data\s+)?(?:exfiltration|theft|disclosure|leak)"),
-    re.compile(r"(?i)\b(?:was|were|has been|have been|had been|got)\s+(?:exfiltrated|stolen|leaked|taken out|transmitted out|sent out)"),
+    re.compile(r"(?i)\b(?:was|were|has been|have been|had been|got)\s+(?:exfiltrated|stolen|leaked|disclosed|taken out|"
+               r"transmitted out|sent out)"),
     re.compile(r"(?i)\b(?:attacker|actor|intruder|they|adversary)\s+(?:exfiltrated|stole|leaked|took|removed)\b"),
     re.compile(r"(?i)\bdata\s+(?:left|was removed from)\s+the\s+(?:hospital|network|laboratory|organisation|organization)"),
+    re.compile(r"(?i)\bexfiltration\s+(?:is\s+|was\s+|has been\s+)?(?:evidenced|confirmed|proven|established|occurred|took place)"),
+    re.compile(r"(?i)\b(?:evidenced|corroborated)\s+(?:data\s+)?(?:exfiltration|disclosure|theft)"),
+]
+# qualifiers that keep a sentence of an exfiltration hypothesis outside the exfiltration claim itself
+_LIMIT = re.compile(r"(?i)\b(?:may|might|could|possibl\w*|potential\w*|suspected|unknown|undetermined|unproven|cannot|"
+                    r"not\s+(?:evidenced|established|shown|determined|determinable|known|corroborated)|no\s+evidence|"
+                    r"does\s+not\s+establish)\b")
+_SENT = re.compile(r"(?<=[.;!?])\s+")
+_BROAD = re.compile(r"(?i)\b(?:all|every|entire|whole|everyone|everything)\b|\bpossible[- ]exposure\b|"
+                    r"\bobserved[- ]access\b|\bnotification\b|\bpopulation\b")
+# data categories (Module C keys) as they are written in prose; a group word needs one covered member
+_CLIN = ("clinical_diagnosis", "clinical_tests", "clinical_results", "clinical_notes")
+_CATEGORY_WORDS = [
+    (re.compile(r"(?i)\b(?:identity|id|passport)\s+numbers?\b|\bnational\s+ids?\b"), ("identity_number",)),
+    (re.compile(r"(?i)(?<!account )(?<!table )(?<!user )(?<!host )(?<!file )(?<!column )\b(?:full\s+)?names?\b"), ("name",)),
+    (re.compile(r"(?i)\bdates?\s+of\s+birth\b|\bbirth\s*dates?\b|\bdob\b"), ("date_of_birth",)),
+    (re.compile(r"(?i)\bcontact\s+details\b|\b(?:tele)?phone\s+numbers?\b|\be-?mail\s+addresse?s?\b"), ("contact_details",)),
+    (re.compile(r"(?i)\b(?:postal|street|home|residential)\s+addresse?s?\b"), ("address",)),
+    (re.compile(r"(?i)\bmedical\s+aid\b"), ("medical_aid",)),
+    (re.compile(r"(?i)\bdiagnos[ie]s\b|\bdiagnosis\s+codes?\b"), ("clinical_diagnosis",)),
+    (re.compile(r"(?i)\b(?:laboratory|lab)\s+tests?\b|\btests?\s+ordered\b"), ("clinical_tests",)),
+    (re.compile(r"(?i)\b(?:test|lab|laboratory)\s+results\b"), ("clinical_results",)),
+    (re.compile(r"(?i)\bclinical\s+notes\b"), ("clinical_notes",)),
+    (re.compile(r"(?i)\b(?:clinical|health|medical)\s+(?:data|information|records|details)\b"), _CLIN),
+    (re.compile(r"(?i)\b(?:payment|credit|debit)\s+cards?\b|\bcard\s+numbers?\b"), ("payment_card",)),
+    (re.compile(r"(?i)\bbank(?:ing)?\s+(?:account|details)s?\b"), ("bank_account",)),
+    (re.compile(r"(?i)\b(?:financial|banking)\s+(?:data|information|records)\b"), ("payment_card", "bank_account")),
 ]
 _ABSENCE = [
     re.compile(r"(?i)\b(?:no|nothing)\s+(?:compromise|access|exfiltration|breach|unauthori[sz]ed access|data loss)\s+"
@@ -78,6 +113,13 @@ def _rank(cls) -> int:
     return ORDER.index(cls) if cls in ORDER else -1
 
 
+class ExfilScope:
+    def __init__(self):
+        self.tables: set[str] = set()
+        self.categories: set[str] = set()
+        self.facts: set[str] = set()
+
+
 class Context:
     def __init__(self, bundle: dict):
         self.bundle = bundle
@@ -96,9 +138,27 @@ class Context:
     def known(self, i: str) -> bool:
         return i in self.items or i in self.facts
 
+    def _eligible(self, i: str) -> dict | None:
+        it = self.items.get(i) or {}
+        ok = it.get("exfiltration_evidence_kind") in EXFILTRATION_EVIDENCE_KINDS and \
+            it.get("consequence_class") == "exfiltration_evidenced"
+        return it if ok else None
+
     def eligible_exfil(self, ids) -> bool:
-        return any((self.items.get(i) or {}).get("exfiltration_evidence_kind") in EXFILTRATION_EVIDENCE_KINDS and
-                   (self.items.get(i) or {}).get("consequence_class") == "exfiltration_evidenced" for i in ids)
+        return any(self._eligible(i) for i in ids)
+
+    def exfil_scope(self, ids) -> ExfilScope:
+        """What the cited eligible items establish: tables, data categories and the facts that count them."""
+        sc = ExfilScope()
+        for i in ids:
+            it = self._eligible(i)
+            if it is None:
+                continue
+            sc.tables |= {str(t).lower() for t in it.get("tables") or []}
+            sc.categories |= set(it.get("categories") or [])
+            sc.facts |= {r[5:] for r in it.get("related") or [] if isinstance(r, str) and r.startswith("fact:")
+                         and r[5:] in self.facts}
+        return sc
 
     def mentions(self, ids) -> str:
         """Everything the cited items say (for traceability of names in model text)."""
@@ -146,7 +206,36 @@ def _asserts(patterns, s: str, guard=_MODAL) -> bool:
     return False
 
 
-def _text_codes(strings, ctx: Context, *, quantities: list[float], eligible_exfil: bool, check_theft: bool = True) -> set[str]:
+def _categories(s: str) -> list[tuple[str, ...]]:
+    t = _TABLE.sub(" ", s)          # a table called "results" is not the category "test results"
+    return [cats for rx, cats in _CATEGORY_WORDS if rx.search(t)]
+
+
+def _scope_check(s: str, scope: ExfilScope | None, scope_values: list[float], *, class_claim: bool) -> tuple[bool, bool]:
+    """(violation, scoped) for one text: every exfiltration sentence (and, for an exfiltration_evidenced hypothesis
+    statement, every unqualified sentence) must stay inside ``scope``; ``scoped`` = an in-scope table/category is named."""
+    violation = scoped = unscoped_theft = False
+    for sent in _SENT.split(s):
+        theft = _asserts(_THEFT, sent)
+        if not theft and not (class_claim and not _LIMIT.search(sent)):
+            continue
+        tables = {t.lower() for t in _TABLE.findall(sent)}
+        cats = _categories(sent)
+        sc = scope or ExfilScope()
+        if not tables <= sc.tables or any(not (set(c) & sc.categories) for c in cats):
+            violation = True
+        if any(n not in scope_values for n in _numbers(sent)) or _BROAD.search(sent):
+            violation = True
+        named = bool(tables & sc.tables) or any(set(c) & sc.categories for c in cats)
+        scoped |= named
+        unscoped_theft |= theft and not named
+    if unscoped_theft and not scoped:
+        violation = True            # "data was exfiltrated" with no table or category is a claim about everything
+    return violation, scoped
+
+
+def _text_codes(strings, ctx: Context, *, quantities: list[float], eligible_exfil: bool, check_theft: bool = True,
+                scope: ExfilScope | None = None, scope_values: list[float] = ()) -> set[str]:
     codes = set()
     for s in strings:
         if not s:
@@ -157,6 +246,8 @@ def _text_codes(strings, ctx: Context, *, quantities: list[float], eligible_exfi
                 codes.add("unsupported_number")
         if check_theft and not eligible_exfil and _asserts(_THEFT, s):
             codes.add("exfiltration_unsupported")
+        elif check_theft and _scope_check(s, scope, list(scope_values), class_claim=False)[0]:
+            codes.add("exfiltration_scope")
         if ctx.has_gaps and _asserts(_ABSENCE, s, _HEDGE):
             codes.add("missing_logs_as_absence")
     return codes
@@ -203,16 +294,23 @@ def _hypothesis(h: dict, ctx: Context) -> dict:
         codes.add("unsupported_conclusion")
     if h["confidence"] == "high" and h["contradicting_evidence"]:
         codes.add("confidence_label")
-    qvals = []
+    scope = ctx.exfil_scope(h["supporting_evidence"])
+    qvals, svals = [], []
     for q in h["quantities"]:
         f = ctx.facts.get(q["fact_id"])
         if f is None or f["value"] != q["value"] or isinstance(q["value"], str) != isinstance(f["value"], str):
             codes.add("unsupported_number")
         elif isinstance(q["value"], (int, float)):
             qvals.append(float(q["value"]))
+            if q["fact_id"] in scope.facts:
+                svals.append(float(q["value"]))
+    if asserted == "exfiltration_evidenced" and eligible:
+        violation, scoped = _scope_check(h["statement"], scope, svals, class_claim=True)
+        if violation or not scoped:
+            codes.add("exfiltration_scope")
     texts = [h["statement"], h["confidence_rationale"], *h["alternative_explanations"],
              *[t["evidence_needed"] for t in h["tests"]], *[t["would_resolve"] for t in h["tests"]]]
-    codes |= _text_codes(texts, ctx, quantities=qvals, eligible_exfil=eligible)
+    codes |= _text_codes(texts, ctx, quantities=qvals, eligible_exfil=eligible, scope=scope, scope_values=svals)
     codes |= _text_codes(h["cannot_conclude"], ctx, quantities=qvals, eligible_exfil=eligible, check_theft=False)
     unverified = _untraceable([h["statement"]], ctx, cited)
     return _verdict(codes, unverified)
@@ -226,7 +324,7 @@ def _listed(it: dict, ctx: Context, *, ids_key: str, text_keys: tuple, assets_ke
     if assets_key and not set(it.get(assets_key) or []) <= ctx.assets:
         codes.add("unknown_asset")
     texts = [it[k] for k in text_keys]
-    codes |= _text_codes(texts, ctx, quantities=[], eligible_exfil=ctx.eligible_exfil(ids))
+    codes |= _text_codes(texts, ctx, quantities=[], eligible_exfil=ctx.eligible_exfil(ids), scope=ctx.exfil_scope(ids))
     if assets_key and any(_EXEC.search(t) for t in texts):
         codes.add("execution_claim")
     return _verdict(codes, _untraceable(texts, ctx, ids) if ids else False)

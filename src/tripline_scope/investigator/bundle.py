@@ -4,7 +4,9 @@ The bundle is the *only* thing a provider sees. It is built from released report
 ``paths`` (B) and ``scope`` (C), each verified (signature and chain) first. Drafts, extracts, restores, logs, the
 notification pack and case sources are never read. Items keep the ids already used in the reports (``AF-``,
 ``PATH-``, ``CLM-``, ``ANOM-``, ``GAP-``, ``COR-``, ``REC-``, ``IM-``); facts (``FACT-``) carry every number a
-provider may quote. Only allowlisted fields are copied; strings are cleaned, re-scrubbed and truncated; Module B
+provider may quote. An item eligible to establish exfiltration also states exactly what it covers: ``tables``,
+``categories`` (data categories) and ``fact:`` references in ``related`` (the only counts an exfiltration claim may
+quote); the validator holds exfiltration claims to that scope. Only allowlisted fields are copied; strings are cleaned, re-scrubbed and truncated; Module B
 and A text is untrusted data (it can contain attacker-controlled names) and is presented to providers as data.
 """
 
@@ -36,6 +38,8 @@ KNOWN_FAMILIES = {
     "web proxy": {"proxy"},
     "web server": {"iis", "apache", "nginx"},
 }
+# the only Module B counts an exfiltration claim backed by a Module B item may quote
+_B_EXFIL_FACTS = ["fact:FACT-B-confirmed_exfiltration-tables", "fact:FACT-B-sensitive_tables_by_class-exfiltration_evidenced"]
 _CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f​-‏ -‮⁦-⁩]")
 
 
@@ -72,7 +76,7 @@ class _Builder:
         rec = {"id": str(iid)[:64], "module": MODULE[kind], "report": {"kind": kind, "version": version}, "type": typ,
                "basis": None, "consequence_class": None, "statement": None, "severity": None, "assets": [],
                "sources": [], "tables": [], "accounts": [], "time_window": None, "confidence": None,
-               "limitations": [], "exfiltration_evidence_kind": None, "related": []}
+               "limitations": [], "exfiltration_evidence_kind": None, "categories": [], "related": []}
         for k, v in fields.items():
             if k not in rec:
                 raise KeyError(k)
@@ -146,7 +150,8 @@ def _paths(bd: _Builder, body: dict, v: int) -> list[str]:
                 consequence_class="exfiltration_evidenced" if eligible else None,
                 statement=text(c.get("establishes")), tables=_ids(c.get("tables")), sources=_ids(c.get("evidence_ids")),
                 exfiltration_evidence_kind=kind if eligible else None,
-                limitations=[text(c.get("does_not_establish"))] if c.get("does_not_establish") else [])
+                limitations=[text(c.get("does_not_establish"))] if c.get("does_not_establish") else [],
+                related=_B_EXFIL_FACTS if eligible else [])
     tables = [t for t in body.get("tables", []) if isinstance(t, dict)]
     order = {c: i for i, c in enumerate(["exfiltration_evidenced", "egress_suspected", "export_or_staging_observed",
                                          "access_observed", "undetermined"])}
@@ -155,13 +160,16 @@ def _paths(bd: _Builder, body: dict, v: int) -> list[str]:
         cl = t.get("claim") or {}
         if t.get("consequence_class") is None and t.get("window_class") in (None, "none_observed"):
             continue
+        exfil = t.get("consequence_class") == "exfiltration_evidenced" and \
+            cl.get("exfiltration_evidence_kind") in EXFILTRATION_EVIDENCE_KINDS
         bd.item(cl.get("claim_id"), "paths", v, "table_claim", basis=cl.get("basis"),
                 consequence_class=t.get("consequence_class"), statement=text(cl.get("statement")),
                 tables=[t.get("table")], sources=_ids(t.get("covering_sources")),
                 time_window=_window(*(cl.get("source_time_window") or [None, None])[:2]), confidence=cl.get("confidence"),
                 exfiltration_evidence_kind=cl.get("exfiltration_evidence_kind"),
                 limitations=[text(x, 160) for x in cl.get("limitations", [])][:3],
-                related=_ids(t.get("paths")) + [f"window:{t.get('window_class')}"] + _ids([c for c in t.get("corroborations", []) if isinstance(c, str)]))
+                related=_ids(t.get("paths")) + [f"window:{t.get('window_class')}"] + _ids([c for c in t.get("corroborations", []) if isinstance(c, str)])
+                + (_B_EXFIL_FACTS if exfil else []))
     for p in sorted(body.get("paths", []), key=lambda p: p.get("rank") or 10**9)[:60]:
         cl = p.get("claim") or {}
         route = p.get("route") or {}
@@ -240,10 +248,20 @@ def _scope(bd: _Builder, body: dict, v: int) -> None:
         bd.fact(f"FACT-C-tier-{tier}", val, "people", "scope", v, f"scope_tiers.{tier}")
         kind = t.get("exfiltration_evidence_kind")
         eligible = tier == "confirmed_exfiltration" and kind in EXFILTRATION_EVIDENCE_KINDS and isinstance(val, int)
+        cats = []
+        if eligible:
+            # the data categories the evidence covers: only those with people counted in this tier
+            for k, n in sorted((t.get("people_per_category") or {}).items()):
+                if isinstance(n, int) and not isinstance(n, bool):
+                    bd.fact(f"FACT-C-exfil-category-{k}", n, "people", "scope", v,
+                            f"scope_tiers.confirmed_exfiltration.people_per_category.{k}")
+                    if n > 0:
+                        cats.append(str(k)[:40])
         bd.item(f"SCOPE-{tier}", "scope", v, "scope_tier", basis=t.get("basis"),
                 consequence_class="exfiltration_evidenced" if eligible else None, statement=text(t.get("explanation")),
-                exfiltration_evidence_kind=kind if eligible else None,
-                related=[f"fact:FACT-C-tier-{tier}"] + ([f"decided_by:{t.get('decided_by')}"] if tier == "notification_scope" else []))
+                exfiltration_evidence_kind=kind if eligible else None, categories=cats,
+                related=[f"fact:FACT-C-tier-{tier}"] + [f"fact:FACT-C-exfil-category-{k}" for k in cats]
+                + ([f"decided_by:{t.get('decided_by')}"] if tier == "notification_scope" else []))
     unres = 0
     for s in (body.get("rows_per_source") or {}).values():
         for t in s.get("tables", []) if isinstance(s, dict) else []:

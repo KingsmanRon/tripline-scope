@@ -61,8 +61,19 @@ def candidate(bundle: dict) -> dict:
         acct = (top.get("accounts") or [{}])[0].get("account_ref")
         who = f"The account {acct}" if acct else "An account"
         where = f" on {top['assets'][0]}" if top["assets"] else ""
-        stmt = (f"{who} read sensitive tables ({', '.join(tables)}){where} through the route shown in {top['id']}; "
-                f"Tripline classifies the data outcome as {HUMAN[asserted]}.")
+        if cover:
+            # the exfiltration claim names only what the corroboration covers; other tables keep the path's class
+            covered = sorted({t for c in cover for t in c.get("tables", [])} & set(top.get("tables", [])))
+            others = [t for t in tables if t not in covered]
+            stmt = (f"Exfiltration is evidenced for {', '.join(covered)} by {', '.join(c['id'] for c in cover)}; "
+                    f"{'the account ' + acct if acct else 'an account'} read {'it' if len(covered) == 1 else 'them'}{where} through "
+                    f"the route shown in {top['id']}.")
+            if others:
+                stmt += (f" For {', '.join(others)} exfiltration is not established: Tripline classifies the outcome "
+                         f"there as {HUMAN[cls]}.")
+        else:
+            stmt = (f"{who} read sensitive tables ({', '.join(tables)}){where} through the route shown in {top['id']}; "
+                    f"Tripline classifies the data outcome as {HUMAN[asserted]}.")
         if pe_q:
             stmt += f" Module C's possible-exposure population is {pe_q[0]['value']} people."
         hyps.append({
@@ -134,6 +145,8 @@ def candidate(bundle: dict) -> dict:
                           "priority": "next", "evidence_ids": [top["id"]]})
         if not cover:
             unproven.append("That patient records were transmitted outside the hospital.")
+        elif others:
+            unproven.append(f"That {', '.join(others)} left the hospital: the corroboration covers other tables only.")
         unproven.append("That the outbound destination belongs to the actor: an indicator match is not attribution.")
     elif findings:
         top = findings[0]

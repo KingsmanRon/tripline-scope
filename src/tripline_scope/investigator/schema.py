@@ -205,7 +205,8 @@ def output_contract() -> dict:
             "Return ONE JSON object and nothing else. Unknown keys are rejected.",
             "Every hypothesis cites evidence ids from evidence_bundle.evidence or evidence_bundle.facts only.",
             "consequence_class may not be stronger than the strongest consequence_class among the cited supporting evidence.",
-            "exfiltration_evidenced requires a cited item with an exfiltration_evidence_kind.",
+            "exfiltration_evidenced requires a cited item with an exfiltration_evidence_kind, and any exfiltration claim "
+            "may name only the tables, data categories and fact: counts that the cited item covers.",
             "Any number in free text must also appear in quantities with a FACT- id whose value is identical.",
             "No URLs, e-mail addresses, ID numbers, phone numbers, credentials, commands or clinical content.",
             "Missing or disabled logs never show that nothing happened; say what cannot be concluded.",
