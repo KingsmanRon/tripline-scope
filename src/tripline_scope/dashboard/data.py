@@ -11,6 +11,7 @@ never as 0. Person-level rows are never returned: the scope report itself carrie
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import re
 from collections import Counter
@@ -65,6 +66,9 @@ EVIDENCE_PREFIXES = {
     "GAP-": ("paths", "gap"),
     "COR-": ("paths", "corroboration"),
     "REC-": ("paths", "recommendation"),
+    "IM-": ("paths", "indicator_match"),
+    "XA-": ("exposure", "coverage_gap"),
+    "SCOPE-": ("scope", "scope_tier"),
     "FACT-": (None, "quantity"),
 }
 _EVIDENCE_ID = re.compile(r"^[A-Z]{2,5}-[A-Za-z0-9_.:-]{1,64}$")
@@ -708,10 +712,18 @@ def people(case: Case) -> dict:
 # ------------------------------------------------------------------------------------------------ investigation
 def _evidence_index(case: Case) -> dict[str, set[str]]:
     idx: dict[str, set[str]] = {"finding": set(), "path": set(), "table_claim": set(), "anomaly": set(),
-                                "gap": set(), "corroboration": set(), "recommendation": set()}
+                                "gap": set(), "corroboration": set(), "recommendation": set(),
+                                "indicator_match": set(), "coverage_gap": set(), "scope_tier": set()}
     e = released(case, "exposure")
     if e:
         idx["finding"] = {f.get("finding_id") for f in e[2].get("findings") or []}
+        for ctl, cov in (e[2].get("coverage") or {}).items():   # same ids as investigator.bundle (XA-…)
+            for u in ((cov or {}).get("not_assessed") or []) + ((cov or {}).get("unavailable") or []):
+                unit = u.get("unit") if isinstance(u, dict) else u
+                idx["coverage_gap"].add("XA-" + hashlib.sha256(f"{ctl}|{unit}".encode()).hexdigest()[:12])
+    sc = released(case, "scope")
+    if sc:
+        idx["scope_tier"] = {f"SCOPE-{t}" for t in (sc[2].get("scope_tiers") or {})}
     p = released(case, "paths")
     if p:
         b = p[2]
@@ -721,6 +733,7 @@ def _evidence_index(case: Case) -> dict[str, set[str]]:
         idx["gap"] = {g.get("gap_id") for g in b.get("gaps") or []}
         idx["corroboration"] = {c.get("corroboration_id") for c in (b.get("inputs") or {}).get("corroborations") or []}
         idx["recommendation"] = {r.get("rec_id") for r in (b.get("containment") or {}).get("recommendations") or []}
+        idx["indicator_match"] = {m.get("match_id") for m in b.get("indicator_matches") or []}
     return idx
 
 
