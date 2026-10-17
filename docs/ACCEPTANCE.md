@@ -1,4 +1,4 @@
-# Acceptance record — Tripline Scope v0
+# Acceptance record — Tripline Scope v0 and release 1
 
 Every result below was produced in this repository on synthetic data, on the machine described in §1. "Pass" means
 the check was run and passed; "Fail" means it was run and missed the target; "Not run" means it was not done here,
@@ -55,6 +55,48 @@ with the reason. No timing in this document is a guarantee.
 | SQL Server TLS | encrypted session; certificate chain and host name verified | pyOpenSSL (Apache-2.0) now bundled. Against SQL Server 2022 with a test-CA certificate: right CA + matching host → encrypted session; mismatched host → refused (accepted only with `trust_server_certificate`, which skips the host check alone); wrong CA → refused in both modes. Unit tests `tests/ingest/test_mssql_tls.py`; the server-side matrix was run by hand (needs a certificate installed in the container) | Pass |
 | Review page as a live process | binds 127.0.0.1 only; sign-in; DNS-rebinding refused | `tscope scope review` started as a subprocess: listening only on 127.0.0.1, reviewer sign-in and item fetch over real HTTP, foreign Host header → 400 (`test_review_page_live_server`) | Pass |
 | Documentation | README, METHOD, SECURITY, EXPOSURE, ACCESS_PATHS, INTEGRATION, ACCEPTANCE | all present (plus INGEST, SUPPLY_CHAIN, PLAN) | Pass |
+
+## 3a. Release 1 — AI Investigator, Investigation Workbench, unified synthetic demo
+
+Measured on the same 4 vCPU / 15.7 GB shared machine, on synthetic data, branch
+`feature/ai-investigator-workbench-demo`.
+
+| Check | Command / evidence | Result | Status |
+|---|---|---|---|
+| Whole test suite incl. Docker/SQL Server, PostgreSQL and both full demo scenarios | `pytest -q tests` | **531 passed, 3 skipped** (opt-in `-m slow` ingest benchmarks), 17 min 18 s | PASS |
+| Same, networking disabled | `make test-offline` | **519 passed**, 15 deselected (Docker/slow) | PASS |
+| Investigator tests | `tests/investigator` | 63 passed (validator 29, workflow 10, injection 3, local provider 12, bridge + bundle 8, workbench integration 1) | PASS |
+| Workbench tests | `tests/dashboard` | 55 passed | PASS |
+| Demo tests | `tests/demo` | 20 passed (2 of them full Docker demos at 20k rows) | PASS |
+| Lint, hashed locks, licence gate, SBOM | `ruff`, `make check-locks licences sbom` | pass; locks runtime 42 / dev 80; 42 runtime distributions, 0 unknown/denied (no new dependency) | PASS |
+| Offline bundle and install | `make bundle bundle-verify install-test`; `tests/packaging` | 496 MB, 74 signed files verified (ephemeral release key); venv and container installs PASS without network; 67 packaging tests passed | PASS |
+| Valid evidence → schema-valid result | `test_fixture_output_is_schema_valid_and_fully_accepted` | 32/32 items accepted | PASS |
+| Unknown / cross-case ids, wrong or stale hashes | `test_unknown_and_cross_case_evidence_ids_rejected`, `test_case_and_bundle_mismatch_rejected`, `test_stale_run_rejected_after_new_module_release`, `test_tampered_released_report_is_refused` | rejected / refused | PASS |
+| SELECT ≠ theft; local export ≠ exfiltration; outbound flow stays suspected | validator tests | `promotion` / `exfiltration_unsupported` | PASS |
+| Exfiltration only with eligible corroboration | `test_exfiltration_requires_eligible_corroboration`; corroborated demo | accepted only with `COR-001`; only `LabDB03.dbo.patients` is `exfiltration_evidenced` | PASS |
+| Missing logs stay explicit; AI cannot fabricate counts | `test_missing_logs_remain_explicit`, `test_ai_cannot_fabricate_population_counts` | rejected | PASS |
+| Prompt injection has no privileged effect | `test_injection.py` (instructions planted in a SQL audit record) | no process, no connection, nothing stored; Module B classes unchanged | PASS |
+| No external network in hospital mode | unavailable-provider and local-provider tests (connections recorded), offline suite, air-gapped demo | only 127.0.0.1 contacted; hosted adapters never connect | PASS |
+| AI absence/failure cannot break A/B/C | `test_unavailable_providers_fail_closed_without_network`, `test_failed_provider_output_is_recorded_safely_and_retry_works` | module report trees identical; `tscope verify` passes | PASS |
+| Approval gates; signed report tamper detection; deterministic re-render | `test_roles_and_review_gates`, `test_release_verify_tamper_and_reproducibility` | reviewer/approver gates enforced; `tscope-verify` fails after tampering; byte-identical re-render | PASS |
+| Manual bridge synthetic-only | `test_bridge_*`, `test_registry_is_tamper_evident` | refused for unattested or mixed cases; registry tampering detected | PASS |
+| Workbench security (localhost, auth, roles, host/CSRF/origin, session expiry, paths, no identifiers, paging, unavailable ≠ 0, read-only, counts agree, offline) | `tests/dashboard` | all covered and passing | PASS |
+| Workbench in a real browser | headless Chromium at 1366×768 against a case with all reports: sign-in, all seven sections | no console errors, no CSP violations, no requests to other origins; advisory and fixture labels shown (manual script, not in the suite) | PASS |
+| Unified demo, suspected | `demo/lab-breach/run.sh --scenario suspected --bridge-export` | DEMO PASSED, 198.9 s; 63 Module A findings from the scanner; no table `exfiltration_evidenced`; Module C confirmed exfiltration `not determinable`; 3 cross-references; 36/36 sources attested; 0 leaks; sources unchanged; all chains incl. `investigation` verified; workbench checks pass (`bench/results/demo_unified_100k_suspected.json`) | PASS |
+| Unified demo, corroborated | `--scenario corroborated` | DEMO PASSED, 205.6 s; Module C confirmed exfiltration 298 people (`bench/results/demo_unified_100k_corroborated.json`) | PASS |
+| Unified demo, air-gapped | `scripts/run_airgapped.sh … run_demo.py` | DEMO PASSED, 195.5 s (`bench/results/demo_unified_100k_airgapped_suspected.json`) | PASS |
+| Matching baseline not regressed | `bench/scope_bench.py --rows 1000000` | auto-link precision 99.966 %, person-count error 0.08 %, review band 0.18 %, estimate 2.6 % from final (`bench/results/1000000_release1.json`) | PASS |
+| 10M matching re-run | — | not re-run for this release (matching code unchanged; recorded 10M result stands) | NOT RUN |
+| Real local model through `--provider local` | — | no model weights available in the build environment; transport tested against a stand-in server only | NOT RUN |
+| Hosted providers (OpenAI Daybreak, Anthropic) | — | not authorised; adapters report `unavailable` | NOT RUN (by design) |
+| Full 80M person-level matching | — | DEFERRED — resource-dependent full 80M person-level matching validation; preliminary estimation already measured separately (`BENCHMARK_80M_RUNBOOK.md`) | DEFERRED |
+| Clean VM / Hyper-V install of this release | — | container installs only | NOT RUN |
+
+Found and fixed during this release: Module B containment never cross-referenced Module A findings by asset
+(it read a top-level `asset_id`; released findings carry `asset.asset_id`) — found by the unified demo test;
+the validator trusted a bundle's stated hash instead of recomputing it; dashboard evidence links did not resolve
+`IM-`, `XA-` and `SCOPE-` ids. Found and documented, not changed: the encrypted-spill option is not wired into
+any module's load path (SECURITY.md §4a, runbook §3).
 
 ## 4. Details for the misses and the scale runs
 
