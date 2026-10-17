@@ -1,0 +1,98 @@
+{
+  "accuracy": {
+    "auto_link_pairs": 135526,
+    "auto_link_precision": 0.9996605817333943,
+    "estimate_error_vs_final": 0.02616994203308356,
+    "estimate_error_vs_truth": 0.02699031461580366,
+    "estimate_point": 145162,
+    "identity_rows": 248822,
+    "identity_rows_with_truth": 248822,
+    "over_merged_predicted_people": 15,
+    "pairwise_precision": 0.9996726376788289,
+    "pairwise_recall": 0.998812181168194,
+    "person_count_error": 0.0007994509964838306,
+    "person_count_signed_error": 0.0007994509964838306,
+    "predicted_people": 141460,
+    "predicted_segments": {
+      "adult_with_contact": 107549,
+      "minor_flagged_no_guardian": 5451,
+      "minor_guardian_routed": 25038,
+      "no_usable_contact": 3422
+    },
+    "review_band_people": 256,
+    "review_band_share": 0.0018096988547999435,
+    "review_pairs": 159,
+    "review_pairs_true_match_share": 0.5660377358490566,
+    "split_true_people": 109,
+    "true_people": 141347,
+    "truth_adults_without_contact": 3462,
+    "truth_minors": 30453,
+    "truth_minors_flagged_no_guardian": 5402,
+    "truth_minors_routed_to_guardian": 25051,
+    "usable_rule_agrees_with_truth": 1.0
+  },
+  "approved_by": null,
+  "config_sha256": "d795e5f834f4f9bb6f64c4233e0b2259593a431081a149dd772157e9d8ee30be",
+  "date": "2026-10-17",
+  "estimate": {
+    "lower": 137903,
+    "point": 145162,
+    "upper": 163720
+  },
+  "hardware": {
+    "cpu_model": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+    "cpus": 4,
+    "memory_gb": 15.7,
+    "platform": "Linux-6.18.44-fc-v139-x86_64-with-glibc2.39",
+    "shared_machine_note": "measured on a development machine shared with other workloads"
+  },
+  "matcher": {
+    "stats": {
+      "cluster_review_pairs": 90,
+      "deterministic_links": 52334,
+      "over_merge_flagged_clusters": 12,
+      "pairs_auto": 135526,
+      "pairs_guarded_non_link": 38756,
+      "pairs_review": 159,
+      "records": 230746,
+      "scored_pairs_above_review": 174441,
+      "usable_rows": 246618
+    },
+    "timings_s": {
+      "classify": 1.044,
+      "cluster": 0.891,
+      "deterministic": 0.05,
+      "records": 1.362,
+      "scoring": 1.378,
+      "training": 12.927
+    }
+  },
+  "memory_limit": null,
+  "method_version": "scope-method/0.1.0",
+  "peak_rss_mb": {
+    "estimate": 2058,
+    "extract": 2058,
+    "load": 2058,
+    "match": 2058,
+    "people": 2058,
+    "synth": 2058
+  },
+  "rows": {
+    "admissions": 1000000,
+    "billing": 499819,
+    "identity_rows": 248822,
+    "match_records": 230746,
+    "patients": 248522,
+    "results": 1221420
+  },
+  "schema": "tripline.scope-bench/v1",
+  "seed": 20260914,
+  "timings_s": {
+    "estimate": 0.44,
+    "extract": 7.64,
+    "load": 6.93,
+    "match": 17.75,
+    "people": 1.07,
+    "synth": 141.89
+  }
+}
