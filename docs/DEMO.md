@@ -26,8 +26,10 @@ reports refer to each other:
   The SA password is read from `TSCOPE_DEMO_MSSQL_PASSWORD` (default `Synth3tic!Demo`, a demo value).
   SQL Server Developer Edition is licensed for development, test and demonstration only. A real case restores
   to an instance the hospital provides and licenses.
-* No network access is needed beyond the local Docker bridge. The earlier single-module demo was run
-  air-gapped (`scripts/run_airgapped.sh`, ACCEPTANCE.md). This unified version has not been re-run air-gapped.
+* No network access is needed beyond the local Docker bridge. The unified demo (suspected scenario, 100 000 rows,
+  including the investigator and workbench stages) passed inside `scripts/run_airgapped.sh`, a network namespace
+  whose only link is the Docker bridge (pypi.org checked unreachable): 195.5 s,
+  `bench/results/demo_unified_100k_airgapped_suspected.json`.
 * The work directory took 53 MB at the default 100 000 admission rows, plus the SQL Server container's own
   storage.
 
@@ -38,6 +40,7 @@ demo/lab-breach/run.sh                              # scenario "suspected" (defa
 demo/lab-breach/run.sh --scenario corroborated      # adds an independently confirmed external copy
 demo/lab-breach/run.sh --scenario suspected --keep-open --workdir /tmp/lab-demo   # leave the case open
 ROWS=20000 demo/lab-breach/run.sh                   # smaller and faster
+demo/lab-breach/run.sh --dashboard                  # then open http://127.0.0.1:8766/ (Ctrl+C to stop)
 ```
 
 `run.sh` passes any extra arguments to `demo/lab-breach/run_demo.py`. Options:
@@ -49,6 +52,8 @@ ROWS=20000 demo/lab-breach/run.sh                   # smaller and faster
 | `--keep-open` | Skip closure, so the case, its reports and the installation can be explored afterwards (`TSCOPE_HOME=<workdir>/home`). The case then gets a run-unique id (`DEMO-LAB-2026-<timestamp>`), because its restored databases stay on the SQL Server container until it is closed with `tscope case close --case <workdir>/case --approver ines`, which the run prints. |
 | `--workdir DIR` | Where everything is written (default `demo/lab-breach/out`; replaced on each run unless `--keep`). |
 | `--rows N` | Synthetic admission rows (default 100 000). |
+| `--dashboard` | Implies `--keep-open`; after `DEMO PASSED` it serves the investigation workbench on `http://127.0.0.1:8766/` (sign in as `olivia`, `rami` or `ines`; demo password in `run_demo.py`). |
+| `--bridge-export` | Also writes `<workdir>/bridge_prompt.json`, the synthetic-only manual-bridge prompt (refused unless every case source is attested synthetic). It is included in the leak scan. |
 
 The run prints one line per step with its duration, then a JSON summary, then `DEMO PASSED` or
 `DEMO FAILED: <checks>`. The full summary is in `<workdir>/demo_summary.json`.
@@ -155,7 +160,7 @@ counts from synthetic data and describe nothing real.
 | The six narrated weaknesses found by the scanner on their assets | 6 of 6 | 6 of 6 |
 | Module B events / sources | 25 747 events from 15 log sources | same |
 | Module B sensitive tables by class (42 tables) | access_observed 17, egress_suspected 4, export_or_staging_observed 1, undetermined 4, no_access_observed 16 | access_observed 17, egress_suspected 3, **exfiltration_evidenced 1** (`LabDB03.dbo.patients`), export_or_staging_observed 1, undetermined 4, no_access_observed 16 |
-| Containment recommendations / cross-referenced to Module A | 21 / 1 (`LAB\vendor.support` → the two A5 findings) | 21 / 1 (same) |
+| Containment recommendations / cross-referenced to Module A | 21 / 3 (supplier account → two A5 findings; `xp_cmdshell` and VPN→database routes on `AST-LABSQL01` → A4/A2/A5 findings on that asset) | 21 / 3 (same) |
 | Module C preliminary estimate (scope v1) | 14 363 people (range 13 644 – 16 200) | same |
 | Module C refined (scope v2): observed access | 12 814 | 12 814 |
 | possible exposure = notification proposal | 13 983 | 13 983 |
@@ -164,6 +169,7 @@ counts from synthetic data and describe nothing real.
 | Leak scan | 86 files, 85 955 needles, 0 hits; positive control 1 file | 88 files, 85 955 needles, 0 hits; positive control 1 file |
 | Inputs unchanged, report chains verified, case closed, certificate verified | yes | yes |
 | Step time (sum) / wall clock of `run.sh` (container already running) | 154.3 s / 154 s | 151.7 s / 154 s |
+| With stages 5–7 (investigator, review, signed investigation report, workbench smoke test, bridge export) | 198.9 s (stages 5–7: 15.2 s) | 205.6 s |
 
 The timings are from the final run of each scenario. Earlier runs of the same flow took 163–179 s of step time
 on the same shared machine. The slowest steps were the SQL Server restore, discovery and extraction (`ingest`,
@@ -183,11 +189,10 @@ exposed.
 * **Finding ids.** Module B's containment recommendations list `module_a_refs`: finding id, control, severity and
   state from the released exposure report, whose hash and version are recorded. A reference is advisory. It does
   not show that the weakness was used in the incident.
-* **Known gap.** Asset-keyed references are not made yet: the recommendation to disable `xp_cmdshell` on
-  `AST-LABSQL01` is not linked to Module A's `A4.mssql-xp-cmdshell` finding on the same asset. The cause is in
-  `paths/containment.py`, which reads a top-level `asset_id`, while released exposure findings store it as
-  `asset.asset_id`. This is a Module B fix. `tests/demo` holds a strict `xfail` test that will pass once it is
-  fixed.
+* **Asset-keyed references.** The recommendation to disable `xp_cmdshell` on `AST-LABSQL01` is linked to Module
+  A's `A4.mssql-xp-cmdshell` finding on the same asset. (This demo found that `paths/containment.py` read a
+  top-level `asset_id` while released exposure findings store `asset.asset_id`; that is fixed, and the demo test
+  that exposed it now passes.)
 * **Scope candidates.** `tscope paths scope-candidates` → `tscope scope constrain`. Module C splits its results
   into the lower scenario (confirmed access windows) and the upper scenario (every implicated table). The
   notification proposal is always the upper scenario.
@@ -224,9 +229,40 @@ Not validated on real hospital or laboratory systems:
 The demo's numbers show that the pipeline is consistent end to end on generated data. They are not accuracy
 claims about real incidents.
 
-## 7. AI Investigator and dashboard
+## 7. AI Investigator and dashboard (stages 5–7)
 
-The integrator completes this section: AI Investigator and dashboard steps are added in `investigate_and_present` in `demo/lab-breach/run_demo.py`.
+After the refined scope report is released, `investigate_and_present` in `run_demo.py` runs:
+
+1. `tscope investigator providers` — the fixture is available; `local` is unavailable (no local model is configured
+   in the demo); `openai-daybreak` and `anthropic` are unavailable by design.
+2. `tscope investigator analyse --provider fixture` (operator). **The fixture is deterministic rule-based output,
+   not AI inference**, and every output says so (`is_model_inference: false`). It exercises the whole pipeline
+   reproducibly; it is not evidence of any model's quality. Observed in both scenarios: 3 hypotheses (main: the
+   attacker account read `LabDB03` patients/admissions on `AST-LABSQL01`, classified exactly as Module B classified
+   it; alternatives: authorised administrative exports; a supplier route with no upstream identity evidence), 32
+   items accepted, 0 rejected by the deterministic validator. In the suspected scenario the main hypothesis stays
+   `egress_suspected` and lists "which patient records, if any, left the hospital network" as not concludable; in
+   the corroborated scenario it cites `COR-001` and is `exfiltration_evidenced` for that table only.
+3. `tscope investigator review` (reviewer `rami`) accepts each hypothesis with a note.
+4. `tscope investigator report` (operator) and `tscope release --kind investigation` (approver `ines`).
+5. `tscope investigator verify` — chain verified and the released body re-rendered byte-identically from the
+   frozen, reviewed input; `tscope-verify chain` on `reports/investigation` passes.
+6. Optional `--bridge-export`: the synthetic-only prompt is written because all 36 (or 38) sources are attested.
+7. Workbench smoke test: `tscope dashboard serve` on a free loopback port, sign-in as the reviewer over real HTTP,
+   and checks that the workbench's possible-exposure count and Module B table classes equal the released
+   reports, every path is listed, the timeline is paged, the released investigation report is shown and the
+   fixture is labelled. All checks passed in both scenarios and air-gapped.
+
+Running a real model instead of the fixture: start a vetted local OpenAI-compatible server on 127.0.0.1, configure
+`investigator.local` in `<workdir>/home/config.yaml` (see `AI_INVESTIGATOR.md` §5), keep the case open
+(`--keep-open`) and run `tscope investigator analyse --provider local`. **No real model was run for this release**;
+model quality is not tested. For a separately authorised chat session on synthetic data only, use
+`tscope investigator bridge-export` / `bridge-import`.
+
+The chain **security weakness → suspicious access → possible data movement → affected-person scope →
+investigative conclusions → remediation → signed evidence** is visible in the workbench: Exposure (Module A
+findings, cross-referenced by Module B), Access paths and Timeline (Module B), People (Module C tiers and bounds),
+AI Investigator (hypotheses with evidence links into A and B), Reports (versions, hashes, approvals, verification).
 
 ## 8. Separate benchmark: preliminary estimate at 80 million admissions
 

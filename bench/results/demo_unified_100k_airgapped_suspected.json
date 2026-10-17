@@ -1,0 +1,277 @@
+{
+  "case_closed": true,
+  "checks": {
+    "all_sources_attested_synthetic": true,
+    "investigation:dashboard_fixture_labelled": true,
+    "investigation:dashboard_investigation_released": true,
+    "investigation:dashboard_paths_listed": true,
+    "investigation:dashboard_possible_exposure_matches_report": true,
+    "investigation:dashboard_tables_by_class_matches_report": true,
+    "investigation:dashboard_timeline_paged": true,
+    "investigation:fixture_completed": true,
+    "investigation:fixture_labelled_not_ai": true,
+    "investigation:investigation_report_reproducible": true,
+    "investigation:no_items_rejected": true,
+    "leak_scan_positive_control": true,
+    "module_a_key_weaknesses_found_by_scanner": true,
+    "module_b_cross_referenced_to_module_a": true,
+    "module_c_confirmed_exfiltration_not_determinable": true,
+    "no_leaks": true,
+    "no_table_exfiltration_evidenced": true,
+    "sources_unchanged": true
+  },
+  "cross_references": 3,
+  "investigation": {
+    "bridge_export": null,
+    "hypotheses": [
+      "H1",
+      "H2",
+      "H3"
+    ],
+    "investigation_verify": {
+      "chain_ok": true,
+      "detail": "re-rendered from the frozen input",
+      "reproducible": true,
+      "versions": [
+        1
+      ]
+    },
+    "is_model_inference": false,
+    "notice": "deterministic fixture output: not AI inference and not evidence of any model's quality",
+    "provider_kind": "fixture",
+    "report_kinds": [
+      "investigation"
+    ],
+    "run_id": "RUN-a681f98ecc44",
+    "validation": {
+      "accepted": 32,
+      "rejected": 0,
+      "unverified": 0
+    }
+  },
+  "leak_scan": {
+    "files_scanned": 95,
+    "hits": 0,
+    "identifiers_checked": 85955,
+    "needles_by_kind": {
+      "seeded estate identifier": 317,
+      "seeded estate secret": 25,
+      "seeded log secret": 1,
+      "synthetic identifier": 85612
+    },
+    "positive_control_files_with_hits": 1,
+    "where": []
+  },
+  "module_a": {
+    "by_control": {
+      "A1": 20,
+      "A2": 9,
+      "A3": 9,
+      "A4": 18,
+      "A5": 7
+    },
+    "by_severity": {
+      "critical": 6,
+      "high": 30,
+      "info": 0,
+      "low": 9,
+      "medium": 18
+    },
+    "findings": 63,
+    "key_weaknesses": {
+      "audit_disabled": "AF-bxplcyen5dsh2smazgj5",
+      "exposed_credential": "AF-n2kmbv2zkiv7gpeagmkh",
+      "over_privileged_service_account": "AF-ui3bewwh5bgqlf3fescc",
+      "stale_export": "AF-uaw7h6lujbscqgy5sjwn",
+      "supplier_access": "AF-crpslpj4lddvsvplejif",
+      "xp_cmdshell_enabled": "AF-ilddfhjd5znpxal4brer"
+    },
+    "report_version": 1
+  },
+  "module_a_findings": {
+    "critical": 6,
+    "high": 30,
+    "info": 0,
+    "low": 9,
+    "medium": 18,
+    "total": 63
+  },
+  "module_b": {
+    "cross_referenced_recommendations": 3,
+    "cross_references": [
+      {
+        "category": "access_paths_to_close",
+        "module_a_findings": [
+          "AF-4x465ccyrv2gtpz6z2fc",
+          "AF-5iaytgawzamcalnuqqwf",
+          "AF-ao4qggek34rl62ibp7od",
+          "AF-bxplcyen5dsh2smazgj5",
+          "AF-fmaizaxkfqbegyzeznb4",
+          "AF-ilddfhjd5znpxal4brer",
+          "AF-lbwyhorx7ak4ol3rcoqs",
+          "AF-okpigrgxjpskh7iw7ona",
+          "AF-u43bl5uydcpnico4pwzc",
+          "AF-ufan6exrztlxadesp7do"
+        ],
+        "rec_id": "REC-459e604ee1dd",
+        "target": "AST-LABSQL01"
+      },
+      {
+        "category": "access_paths_to_close",
+        "module_a_findings": [
+          "AF-4x465ccyrv2gtpz6z2fc",
+          "AF-5iaytgawzamcalnuqqwf",
+          "AF-6m2tkqfe6gevl7dw4azj",
+          "AF-7ykst7eikuiwjeo5cpem",
+          "AF-ao4qggek34rl62ibp7od",
+          "AF-bxplcyen5dsh2smazgj5",
+          "AF-crpslpj4lddvsvplejif",
+          "AF-fmaizaxkfqbegyzeznb4",
+          "AF-i2ada2n5xncrz25ncfwr",
+          "AF-ilddfhjd5znpxal4brer",
+          "AF-im6ef3qlcdounayzbjsg",
+          "AF-lbwyhorx7ak4ol3rcoqs",
+          "AF-neeztufd6irq4uzwvc5y",
+          "AF-noilc3p73y7lotlbx73h",
+          "AF-okpigrgxjpskh7iw7ona",
+          "AF-p235tu2nmtixwdfc33qz",
+          "AF-ryzuu5hb24kxujyxh2lp",
+          "AF-u43bl5uydcpnico4pwzc",
+          "AF-ufan6exrztlxadesp7do",
+          "AF-ui3bewwh5bgqlf3fescc",
+          "AF-umvatd4537xhj6zh2ffv",
+          "AF-vud7tvqfgrcxrfh6s5jc",
+          "AF-z5sipb47c4d7lnlyhjdr",
+          "AF-zbkkqn4axq4euew3mw6s"
+        ],
+        "rec_id": "REC-e3f7d0815f51",
+        "target": "AST-LABSQL01"
+      },
+      {
+        "category": "accounts_to_review",
+        "module_a_findings": [
+          "AF-crpslpj4lddvsvplejif",
+          "AF-umvatd4537xhj6zh2ffv"
+        ],
+        "rec_id": "REC-7f55f61910f4",
+        "target": "LAB\\vendor.support"
+      }
+    ],
+    "exfiltration_evidenced_tables": [],
+    "module_a_link": "cross-referenced",
+    "recommendations": 21,
+    "report_version": 1,
+    "sensitive_tables_by_class": {
+      "access_observed": 17,
+      "egress_suspected": 4,
+      "export_or_staging_observed": 1,
+      "no_access_observed": 16,
+      "undetermined": 4
+    },
+    "table_classes": {
+      "LabDB01.dbo.results": "access_observed",
+      "LabDB03.dbo.admissions": "egress_suspected",
+      "LabDB03.dbo.patients": "egress_suspected",
+      "LabDB05.dbo.billing": "export_or_staging_observed",
+      "LabDB07.dbo.patients": "egress_suspected",
+      "LabDB09.dbo.patients": "undetermined"
+    }
+  },
+  "module_b_classes": {
+    "access_observed": 17,
+    "egress_suspected": 4,
+    "export_or_staging_observed": 1,
+    "no_access_observed": 16,
+    "undetermined": 4
+  },
+  "module_c": {
+    "confirmed_exfiltration_basis": "unknown",
+    "preliminary": {
+      "unique_people": {
+        "lower": 13644,
+        "point": 14363,
+        "upper": 16200
+      },
+      "version": 1
+    },
+    "refined_version": 2,
+    "tiers": {
+      "confirmed_exfiltration": "not determinable",
+      "notification_scope": 13983,
+      "observed_access": 12814,
+      "possible_exposure": 13983
+    }
+  },
+  "module_c_tiers": {
+    "confirmed_exfiltration": "not determinable",
+    "notification_scope": 13983,
+    "observed_access": 12814,
+    "possible_exposure": 13983
+  },
+  "recorded_note": "unified synthetic demo on 4 vCPU / 15.7 GB shared dev VM; synthetic data only",
+  "rows": 100000,
+  "scenario": "suspected",
+  "sources_unchanged": true,
+  "synthetic_origin": {
+    "all_sources_attested_synthetic": true,
+    "problems": 0,
+    "sources": 36
+  },
+  "timings_s": {
+    "audit export": 0.74,
+    "audit verify": 0.79,
+    "build .bak backups": 15.15,
+    "case init": 0.8,
+    "close": 2.15,
+    "dashboard smoke test": 1.44,
+    "estimate": 4.16,
+    "exposure report": 1.15,
+    "exposure scan": 1.32,
+    "ingest": 58.44,
+    "init": 0.95,
+    "investigate_and_present": 13.08,
+    "investigator analyse (fixture, NOT AI inference)": 1.19,
+    "investigator providers": 0.73,
+    "investigator report": 1.0,
+    "investigator review H1": 0.95,
+    "investigator review H2": 0.91,
+    "investigator review H3": 0.87,
+    "investigator verify": 0.85,
+    "leak scan": 6.53,
+    "login admin": 0.86,
+    "login olivia": 7.72,
+    "login rami": 2.44,
+    "notify build": 2.37,
+    "notify export": 1.7,
+    "paths analyse": 3.07,
+    "paths ingest": 3.75,
+    "paths report": 5.88,
+    "paths scope-candidates": 1.25,
+    "release exposure": 0.94,
+    "release investigation": 0.85,
+    "release paths": 1.38,
+    "release preliminary": 1.03,
+    "release refined": 1.28,
+    "scope constrain": 1.07,
+    "scope match": 11.78,
+    "scope match (replay decisions)": 12.18,
+    "scope report": 1.64,
+    "scope review (simulated reviewer)": 2.07,
+    "source add": 8.89,
+    "synth": 4.77,
+    "synthetic estate (Module A)": 0.6,
+    "synthetic incident logs (Module B)": 0.48,
+    "synthetic-origin check": 0.29,
+    "tscope-verify certificate": 0.08,
+    "tscope-verify chain exposure": 0.09,
+    "tscope-verify chain investigation": 0.08,
+    "tscope-verify chain paths": 0.18,
+    "tscope-verify chain scope": 0.09,
+    "tscope-verify chain scope (after closure)": 0.11,
+    "user add ines": 0.85,
+    "user add olivia": 0.83,
+    "user add rami": 0.94,
+    "verify": 0.87
+  },
+  "total_s": 195.5
+}
