@@ -124,19 +124,107 @@ def latest_released(case: Path, kind: str) -> tuple[Path, dict]:
 
 
 # ------------------------------------------------------------------------------------------------ integration hook
-def investigate_and_present(env: dict, case: Path, work: Path, args: argparse.Namespace) -> dict:
-    """INTEGRATION HOOK — placeholder, intentionally does nothing yet.
+def _dashboard_smoke(env: dict, case: Path, work: Path) -> dict:
+    """Stage 7: start the workbench on loopback, sign in over real HTTP, and check it agrees with the reports."""
+    import http.cookiejar
+    import re
+    import socket
+    import urllib.parse
+    import urllib.request
 
-    Called after the refined scope report is released and before verification. The integrator fills it with the
-    AI Investigator and dashboard stages of the unified demo contract (docs/PLAN.md §14):
-    ``investigator analyse --provider fixture`` → review → ``investigator report`` → ``release --kind
-    investigation`` → dashboard smoke test.
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    login("olivia", env)
+    proc = subprocess.Popen([sys.executable, "-m", "tripline_scope", "dashboard", "serve", "--case", str(case),
+                             "--port", str(port)], env=env, cwd=REPO, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True)
+    base = f"http://127.0.0.1:{port}"
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(jar))
+    t0 = time.perf_counter()
+    try:
+        for _ in range(100):
+            try:
+                page = opener.open(base + "/", timeout=2).read().decode()
+                break
+            except OSError:
+                if proc.poll() is not None:
+                    raise SystemExit("dashboard failed to start:\n" + proc.communicate()[1][-2000:]) from None
+                time.sleep(0.2)
+        tok = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+        form = urllib.parse.urlencode({"username": "rami", "password": PASSWORD, "csrf": tok}).encode()
+        opener.open(urllib.request.Request(base + "/login", data=form), timeout=10).read()  # noqa: S310 - fixed loopback http URL
 
-    Return a dict merged into ``demo_summary.json`` under ``"investigation"``. If it releases further report kinds,
-    list them under ``"report_kinds"`` so the verification stage also runs ``tscope_verify chain`` on them; any
-    ``"checks"`` (name → bool) are added to the pass/fail checks.
-    """
-    return {}
+        def get(path):
+            return json.loads(opener.open(base + path, timeout=30).read())
+
+        views = {name: get(f"/api/{name}") for name in ("overview", "paths", "exposure", "people", "investigation",
+                                                         "reports")}
+        tl = get("/api/timeline?limit=50")
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+    timings["dashboard smoke test"] = time.perf_counter() - t0
+    reports = case / "reports"
+    scope = json.loads(max((reports / "scope").glob("v*/report.json")).read_bytes())
+    paths = json.loads(max((reports / "paths").glob("v*/report.json")).read_bytes())
+    people = views["people"]
+    checks = {
+        "possible_exposure_matches_report": people["refined"]["scope_tiers"]["possible_exposure"]["count"]
+        == scope["scope_tiers"]["possible_exposure"]["count"],
+        "tables_by_class_matches_report": views["paths"]["sensitive_tables_by_class"]
+        == paths["classification"]["sensitive_tables_by_class"],
+        "paths_listed": len(views["paths"].get("paths", [])) == len(paths.get("paths", [])),
+        "timeline_paged": tl.get("limit") == 50 and len(tl.get("events", [])) <= 50,
+        "investigation_released": isinstance(views["investigation"].get("released_report"), dict)
+        and views["investigation"]["released_report"].get("report_version") is not None,
+        "fixture_labelled": views["investigation"].get("fixture") is True,
+    }
+    print(f"[dashboard] http://127.0.0.1:{port}/ checks: {checks}", flush=True)
+    if not all(checks.values()):
+        raise SystemExit(f"dashboard smoke test failed: {checks}")
+    return checks
+
+
+def investigate_and_present(env: dict, case: Path, work: Path, args) -> dict:
+    """Stages 5–7: AI-assisted investigation (deterministic fixture, labelled; never presented as AI inference),
+    human review, signed investigation report, and the workbench against the completed case."""
+    c = ["--case", str(case)]
+    login("olivia", env)
+    run("investigator providers", ["investigator", "providers"], env)
+    out = json.loads(run("investigator analyse (fixture, NOT AI inference)",
+                         ["--json", "investigator", "analyse", *c, "--provider", "fixture"], env))
+    if out["analysis_status"] != "completed":
+        raise SystemExit(f"investigator analysis did not complete: {out['analysis_status']}")
+    login("rami", env)
+    for h in out["hypotheses"]:
+        run(f"investigator review {h}", ["investigator", "review", *c, "--run", out["run_id"], "--item", h,
+                                         "--decision", "accept", "--note", "Reviewed against the cited evidence (demo)"],
+            env)
+    login("olivia", env)
+    run("investigator report", ["investigator", "report", *c, "--run", out["run_id"]], env)
+    run("release investigation", ["release", *c, "--kind", "investigation", "--approver", "ines"], env)
+    login("rami", env)
+    ver = json.loads(run("investigator verify", ["--json", "investigator", "verify", *c], env))
+    if not (ver["chain_ok"] and ver["reproducible"]):
+        raise SystemExit(f"investigation report did not verify: {ver}")
+    bridge = None
+    if getattr(args, "bridge_export", False):
+        login("olivia", env)
+        b = json.loads(run("investigator bridge-export (synthetic only)",
+                           ["--json", "investigator", "bridge-export", *c, "--out", str(work / "bridge_prompt.json")], env))
+        bridge = {"run_id": b["run_id"], "file": b["out"]}
+    dash = _dashboard_smoke(env, case, work)
+    return {"run_id": out["run_id"], "provider_kind": out["provider_kind"], "is_model_inference": out["is_model_inference"],
+            "notice": "deterministic fixture output: not AI inference and not evidence of any model's quality",
+            "hypotheses": out["hypotheses"], "validation": out["validation"], "investigation_verify": ver,
+            "bridge_export": bridge, "report_kinds": ["investigation"],
+            "checks": {"fixture_completed": out["analysis_status"] == "completed",
+                       "fixture_labelled_not_ai": out["is_model_inference"] is False,
+                       "no_items_rejected": out["validation"]["rejected"] == 0,
+                       "investigation_report_reproducible": bool(ver["chain_ok"] and ver["reproducible"]),
+                       **{f"dashboard_{k}": v for k, v in dash.items()}}}
 
 
 # ------------------------------------------------------------------------------------------------ summary helpers
@@ -215,6 +303,10 @@ def main() -> int:
                     help="suspected: outbound flows of unknown content, no corroboration; corroborated: an "
                          f"independently confirmed external copy of {CORROBORATED_TABLE} (leak sample)")
     ap.add_argument("--keep-open", action="store_true", help="do not close the case (explore it afterwards)")
+    ap.add_argument("--dashboard", action="store_true",
+                    help="keep the case open and serve the investigation workbench at the end (Ctrl+C to stop)")
+    ap.add_argument("--bridge-export", action="store_true",
+                    help="also write the synthetic-only manual-bridge prompt (refused unless every source is attested)")
     ap.add_argument("--rows", type=int, default=100_000, help="synthetic admission rows")
     ap.add_argument("--workdir", default=str(HERE / "out"))
     ap.add_argument("--mssql-host", default="127.0.0.1")
@@ -222,6 +314,8 @@ def main() -> int:
     ap.add_argument("--mssql-container", default="mssql-test", help="container used for .bak transfer (docker cp)")
     ap.add_argument("--keep", action="store_true", help="keep an existing workdir")
     args = ap.parse_args()
+    if args.dashboard:
+        args.keep_open = True       # the workbench needs the open case (encrypted investigator run, case key)
     print(HEADER, flush=True)
     print(f"scenario: {args.scenario}", flush=True)
 
@@ -422,6 +516,15 @@ def main() -> int:
                                               "checks")}, indent=2))
     ok = all(checks.values())
     print("DEMO PASSED" if ok else "DEMO FAILED: " + ", ".join(k for k, v in checks.items() if not v))
+    if ok and args.dashboard:
+        login("rami", env)
+        print(f"Investigation workbench for {case_id}: http://127.0.0.1:8766/  (sign in as olivia, rami or ines; "
+              "password in this script; Ctrl+C to stop)", flush=True)
+        try:
+            subprocess.run([sys.executable, "-m", "tripline_scope", "dashboard", "serve", "--case", str(case)],
+                           env=env, cwd=REPO, check=False)
+        except KeyboardInterrupt:
+            pass
     return 0 if ok else 1
 
 
@@ -448,7 +551,8 @@ def leak_scan(work: Path, exempt: list[Path], estate_truth: dict | None = None) 
         needles[v] = "seeded estate identifier"
     needles[SQL_CMDLINE_SECRET] = "seeded log secret"
     needles = {n: k for n, k in needles.items() if len(n) >= _GRAM}
-    roots = [work / "case", work / "home", work / "console.txt", work / "audit.jsonl", work / "demo_summary.json"]
+    roots = [work / "case", work / "home", work / "console.txt", work / "audit.jsonl", work / "demo_summary.json",
+             work / "bridge_prompt.json"]
     skip = [p.resolve() for p in exempt]
     inputs = [(work / d).resolve() for d in ("synth", "baks", "estate", "logs")]
     maxlen = max(len(n) for n in needles)
