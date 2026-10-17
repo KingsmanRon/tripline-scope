@@ -307,7 +307,9 @@ def test_page_is_self_contained_and_escapes(dash):
     for doc in (html, login_html):
         assert not re.search(r"""(src|href)\s*=\s*["']?(https?:)?//""", doc, re.I)
         assert "@import" not in doc and "url(" not in doc
-        assert "<link" not in doc.lower() and "<iframe" not in doc.lower()
+        # the only <link> allowed is the empty inline icon (it loads nothing); no stylesheets or other resources
+        links = re.findall(r"<link\b[^>]*>", doc, re.I)
+        assert links == ['<link rel="icon" href="data:,">'] and "<iframe" not in doc.lower()
     assert "innerHTML" not in html and "outerHTML" not in html and "insertAdjacentHTML" not in html
     assert "eval(" not in html and "new Function" not in html and "document.write" not in html
     for section in ("Overview", "Timeline", "Access paths", "Exposure", "People", "AI Investigator", "Reports"):

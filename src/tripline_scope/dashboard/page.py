@@ -34,7 +34,7 @@ h2[tabindex]:focus,main:focus{outline:none}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 """
 
-LOGIN_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+LOGIN_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="same-origin">
 <title>Investigation Workbench — sign in</title>
 <style>""" + _CSS_BASE + """
@@ -55,7 +55,7 @@ button{margin-top:1.2em;font:inherit;font-weight:600;padding:.5em 1.4em;border:0
 <p class="note">Read-only view of released reports on this computer only. Sign-ins and views of sensitive
 sections are written to the case audit log.</p></main></body></html>"""
 
-PAGE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+PAGE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="csrf-token" content="{{csrf}}">
 <title>Investigation Workbench — {{case}}</title>
