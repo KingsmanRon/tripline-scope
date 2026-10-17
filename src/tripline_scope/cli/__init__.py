@@ -24,6 +24,7 @@ COMMAND_MODULES = [
     "tripline_scope.scope.cli",
     "tripline_scope.readiness.cli",
     "tripline_scope.readiness.report",
+    "tripline_scope.investigator.cli",
 ]
 
 
