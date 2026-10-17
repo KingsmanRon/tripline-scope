@@ -76,6 +76,7 @@ nav.side a[aria-current=page]{background:var(--brand);color:#fff}nav.side a[aria
 nav.side a:hover{background:#d5e0ea}nav.side a[aria-current=page]:hover{background:var(--brand)}
 nav.side .foot{margin-top:1.4em;font-size:.82em;color:var(--muted);padding:0 .7em}
 main{padding:1em 1.4em 3em;min-width:0}
+.col{min-width:0}#integrity{padding:.4em 1.4em 0}#integrity:empty{display:none}
 main h2{font-size:1.3em;margin:.2em 0 .2em;color:var(--brand)}main h3{font-size:1.05em;margin:1.3em 0 .4em}
 .lede{color:var(--muted);margin:.1em 0 1em;max-width:70em}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.9em}
@@ -112,6 +113,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .banner.advisory{background:#f5f0ff;border-color:#4c1d95;color:#2e1065}
 .banner.fixture{background:#fff7e6;border-color:#b45309;color:#5b3200}
 .banner.info{background:#eef4ff;border-color:#1e3a8a;color:#172554}
+.banner.integrity{background:#fdecec;border-color:#9b1c1c;color:#5f1111}
 .banner strong{display:block;font-size:1.02em}
 .chips{display:flex;flex-wrap:wrap;gap:.3em;margin:.2em 0}
 .chip{font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#eef2f6;border:1px solid var(--line);border-radius:4px;padding:0 .4em;color:var(--ink);text-decoration:none}
@@ -170,7 +172,8 @@ pre.render{white-space:pre-wrap;background:#fff;border:1px solid var(--line);pad
  <li><a href="#investigation" data-section="investigation"><span class="letter" aria-hidden="true">F</span>AI Investigator</a></li>
  <li><a href="#reports" data-section="reports"><span class="letter" aria-hidden="true">G</span>Reports</a></li>
 </ol><p class="foot">Views of People and AI Investigator are written to the case audit log.</p></nav>
-<main id="main" tabindex="-1" aria-live="polite"></main>
+<div class="col"><div id="integrity"></div>
+<main id="main" tabindex="-1" aria-live="polite"></main></div>
 </div>
 <script nonce="{{nonce}}">
 "use strict";
@@ -212,7 +215,7 @@ function clear(e){ while (e.firstChild) e.removeChild(e.firstChild); }
 
 /* ---------- values, statuses and badges ---------- */
 const STATUS = {not_determinable:"Not determinable", not_assessed:"Not assessed", awaiting_analysis:"Awaiting analysis",
-  not_performed:"Not performed", not_released:"Not released"};
+  not_performed:"Not performed", not_released:"Not released", integrity_failure:"INTEGRITY FAILURE \u2014 not shown"};
 function isStatus(v){ return v && typeof v === "object" && !Array.isArray(v) && typeof v.status === "string" && STATUS[v.status]; }
 function missing(text, reason){
   return h("span", {class:"missing", title: reason || null}, h("span", {"aria-hidden":"true"}, "\\u25cb"), text,
@@ -284,6 +287,15 @@ function heading(title, lede){
   return [h2, lede ? h("p", {class:"lede"}, lede) : null];
 }
 function errorBox(msg){ return h("p", {class:"err", role:"alert"}, msg); }
+function integrityBox(d){
+  return h("div", {class:"banner integrity", role:"alert"}, h("strong", null, "\u26a0 " + (d.warning || "INTEGRITY FAILURE")),
+    d.reason ? h("span", null, "Detail: " + d.reason) : null);
+}
+function showAlerts(alerts){
+  const box = document.getElementById("integrity");
+  clear(box);
+  (alerts || []).forEach(a => add(box, integrityBox(a)));
+}
 
 /* ---------- network ---------- */
 async function api(path){
@@ -291,6 +303,8 @@ async function api(path){
   if (r.status === 401) { location.reload(); throw new Error("signed out"); }
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error((body && body.error) ? body.error : "HTTP " + r.status);
+  showAlerts(body.integrity_alerts);
+  if (body.status === "integrity_failure") { const e = new Error(body.warning); e.integrity = body; throw e; }
   return body;
 }
 document.getElementById("signout").addEventListener("click", async () => {
@@ -370,7 +384,7 @@ async function renderTimeline(root){
   add(root, form);
   const qs = new URLSearchParams(TL.params).toString();
   let d;
-  try { d = await api("/api/timeline?" + qs); } catch (e) { add(root, errorBox("Could not load the timeline: " + e.message)); return; }
+  try { d = await api("/api/timeline?" + qs); } catch (e) { add(root, e.integrity ? integrityBox(e.integrity) : errorBox("Could not load the timeline: " + e.message)); return; }
   if (isStatus(d)) { add(root, val(d)); return; }
   if (!TL.facets) { TL.facets = d.facets; clear(root); return renderTimeline(root); }
   const first = d.total ? d.offset + 1 : 0, last = d.offset + d.events.length;
@@ -642,22 +656,26 @@ async function renderInvestigation(root){
     add(root, h("h3", null, "Hypotheses"));
     (run.hypotheses || []).forEach(hy => add(root, hypCard(hy, links, decisions[hy.hypothesis_id])));
     if (!(run.hypotheses || []).length) add(root, missing("No accepted hypotheses"));
+    const review = {label:"Review", get: x => { const r = decisions[x.item_id];
+      return r ? h("span", {class:"badge b-obs"}, r.decision + " by " + r.reviewer) : h("span", {class:"badge b-unk"}, "Not reviewed \u2014 not approved"); }};
     add(root, h("h3", null, "Missing evidence"));
     add(root, table(null, [{label:"What is missing", get: m => m.description}, {label:"Source family", get: m => m.source_family || "—"},
-      {label:"Related evidence", get: m => chips(m.related_evidence, links)}], run.missing_evidence || []));
+      {label:"Related evidence", get: m => chips(m.related_evidence, links)}, review], run.missing_evidence || []));
     add(root, h("h3", null, "Next investigation steps"));
-    add(root, table(null, [{label:"Priority", get: x => x.priority}, {label:"Step", get: x => x.step}, {label:"Evidence", get: x => chips(x.evidence_ids, links)}], run.investigation_steps || []));
+    add(root, table(null, [{label:"Priority", get: x => x.priority}, {label:"Step", get: x => x.step}, {label:"Evidence", get: x => chips(x.evidence_ids, links)}, review], run.investigation_steps || []));
     add(root, h("h3", null, "Remediation (advisory)"));
     add(root, table(null, [{label:"Priority", get: x => x.priority}, {label:"Action", get: x => x.action}, {label:"Assets", get: x => (x.asset_ids || []).join(", ") || "—"},
-      {label:"Evidence", get: x => chips(x.evidence_ids, links)}], run.remediation || []));
+      {label:"Evidence", get: x => chips(x.evidence_ids, links)}, review], run.remediation || []));
     add(root, h("h3", null, "Unproven assertions"));
     add(root, (run.unproven_assertions || []).length ? h("ul", {class:"plain"}, run.unproven_assertions.map(u => h("li", null, u))) : h("p", null, "None recorded."));
+  } else if (run && run.status === "integrity_failure") {
+    add(root, integrityBox(run));
   } else {
     add(root, h("p", null, "Latest validated run: ", val(run)));
   }
   add(root, h("h3", null, "Released investigation report"));
   const rr = d.released_report;
-  add(root, isStatus(rr) ? val(rr) : kv([["Version", "v" + rr.report_version], ["Approved by", rr.approved_by], ["Approved at", when(rr.approved_at)],
+  add(root, rr && rr.status === "integrity_failure" ? integrityBox(rr) : isStatus(rr) ? val(rr) : kv([["Version", "v" + rr.report_version], ["Approved by", rr.approved_by], ["Approved at", when(rr.approved_at)],
     ["Report hash", h("code", null, rr.report_sha256)]]));
 }
 function hypCard(hy, links, decision){
@@ -690,6 +708,11 @@ async function renderReports(root, refresh){
   Object.keys(d.kinds).forEach(kind => {
     const k = d.kinds[kind];
     add(root, h("h3", null, kind));
+    if (k.status === "integrity_failure") {
+      add(root, integrityBox(k));
+      if (k.verification && k.verification.render) add(root, h("pre", {class:"render"}, k.verification.render));
+      return;
+    }
     if (k.status !== "released") { add(root, val(k)); return; }
     const v = k.verification || {};
     add(root, h("p", null, isStatus(v) ? val(v) : (v.ok ? h("span", {class:"ok"}, "\\u2713 Verified: signatures, hashes and chain (" + v.checks + " checks)")
@@ -711,7 +734,13 @@ async function route(){
   document.querySelectorAll("nav.side a").forEach(a => { if (a.dataset.section === sec) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   clear(main);
   const root = h("div");
-  try { await ROUTES[sec](root); } catch (e) { add(root, errorBox("Could not load this section: " + e.message)); }
+  try { await ROUTES[sec](root); } catch (e) {
+    if (!root.querySelector("h2")) {
+      const a = document.querySelector('nav.side a[data-section="' + sec + '"]');
+      add(root, heading(a ? a.querySelector(".letter").textContent + " \u00b7 " + a.lastChild.textContent : sec, null));
+    }
+    add(root, e.integrity ? integrityBox(e.integrity) : errorBox("Could not load this section: " + e.message));
+  }
   clear(main); add(main, root);
   const h2 = main.querySelector("h2"); if (h2) h2.focus();
 }

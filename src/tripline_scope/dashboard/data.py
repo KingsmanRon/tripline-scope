@@ -1,7 +1,9 @@
 """Read models for the Investigation Workbench: pure functions over a case's *released* reports.
 
 Nothing here writes. Inputs are released report versions (``ReportStore``) and, for the AI Investigator section,
-the latest validated investigator run read through the case store. Drafts, ``notify/``, extracts, sources and
+the latest validated investigator run read through the case store. Every released file is read through the
+integrity gate (:mod:`.integrity`): a report kind whose chain does not verify is returned as
+``{"status": "integrity_failure", "warning": ...}`` and none of its content is shown. Drafts, ``notify/``, extracts, sources and
 attachments other than the released Module B timeline are never read.
 
 Missing data is returned as ``{"status": "not_assessed" | "not_determinable" | "awaiting_analysis" | ...}`` and
@@ -25,6 +27,8 @@ from tripline_scope.core.redact import scrub_text
 from tripline_scope.core.reports import ReportStore
 from tripline_scope.core.timeutil import parse_utc
 from tscope_verify import formats as F
+
+from .integrity import IntegrityFailure, TrustGate
 
 # Report kinds the workbench shows and serves; files that may be downloaded from a released version.
 REPORT_KINDS = ("exposure", "paths", "scope", "investigation", "readiness")
@@ -131,29 +135,34 @@ def scrub(obj):
 
 
 @lru_cache(maxsize=64)
-def _load_json_cached(path: str, mtime_ns: int, size: int):
-    return json.loads(Path(path).read_bytes())
+def _load_json_cached(path: str, mtime_ns: int, ctime_ns: int, size: int, ino: int) -> tuple[str, object]:
+    data = Path(path).read_bytes()
+    return hashlib.sha256(data).hexdigest(), json.loads(data)
 
 
-def _read_json(path: Path):
+def load_json_hashed(path: Path) -> tuple[str, object]:
+    """(sha256 of the bytes parsed, parsed JSON). Cached by a key that changes with any write (ctime and inode
+    included); the integrity gate compares the hash with the verified release, so a stale or altered cache entry
+    can never be served as verified data."""
     st = path.stat()
-    return _load_json_cached(str(path), st.st_mtime_ns, st.st_size)
+    return _load_json_cached(str(path), st.st_mtime_ns, st.st_ctime_ns, st.st_size, st.st_ino)
 
 
-def released(case: Case, kind: str, version: int | None = None) -> tuple[int, Path, dict] | None:
-    """(version, directory, report body) of a released version (latest by default), or None."""
+def released(case: Case, kind: str, gate: TrustGate, version: int | None = None) -> tuple[int, Path, dict] | None:
+    """(version, directory, report body) of a verified released version (latest by default), or None.
+    Raises IntegrityFailure if the kind's chain does not verify or the body differs from what was verified."""
+    gate.require(kind)
     vs = dict(ReportStore(case).versions(kind))
     if not vs:
         return None
     n = max(vs) if version is None else version
     if n not in vs or not (vs[n] / F.REPORT_FILE).is_file():
         return None
-    return n, vs[n], _read_json(vs[n] / F.REPORT_FILE)
+    return n, vs[n], gate.read_json(kind, n, vs[n])
 
 
-def release_record(vdir: Path) -> dict:
-    p = vdir / F.RELEASE_FILE
-    return _read_json(p) if p.is_file() else {}
+def release_record(gate: TrustGate, kind: str, n: int, vdir: Path) -> dict:
+    return gate.read_json(kind, n, vdir, F.RELEASE_FILE)
 
 
 def _norm_host(h) -> str | None:
@@ -172,7 +181,7 @@ def _ts(text) -> dt.datetime | None:
 
 
 # ------------------------------------------------------------------------------------------------ overview
-def overview(case: Case) -> dict:
+def overview(case: Case, gate: TrustGate) -> dict:
     rs = ReportStore(case)
     kinds, approvals = {}, []
     for kind in REPORT_KINDS:
@@ -183,8 +192,13 @@ def overview(case: Case) -> dict:
                            "draft_present": draft_count > 0}
             continue
         n, vdir = vs[-1]
-        rel = release_record(vdir)
-        body = _read_json(vdir / F.REPORT_FILE)
+        try:
+            gate.require(kind)
+            rel = release_record(gate, kind, n, vdir)
+            body = gate.read_json(kind, n, vdir)
+        except IntegrityFailure as exc:
+            kinds[kind] = {**gate.failure(kind, exc), "draft_present": draft_count > 0}
+            continue
         appr = rel.get("approval") or {}
         if appr.get("approved_at"):
             approvals.append(appr["approved_at"])
@@ -216,7 +230,7 @@ def overview(case: Case) -> dict:
             "latest_release_approved_at": max(approvals) if approvals else awaiting("nothing released yet"),
             "declared_gaps": len(case.config.get("declared_gaps") or []),
         },
-        "module_b": _module_b_coverage(case),
+        "module_b": _module_b_coverage(case, gate),
         "score": None,
         "score_note": "No overall score is computed: the sections below report what each module found and what it "
                       "could not assess.",
@@ -224,8 +238,11 @@ def overview(case: Case) -> dict:
     return out
 
 
-def _module_b_coverage(case: Case) -> dict:
-    r = released(case, "paths")
+def _module_b_coverage(case: Case, gate: TrustGate) -> dict:
+    try:
+        r = released(case, "paths", gate)
+    except IntegrityFailure as exc:
+        return gate.failure("paths", exc)
     if r is None:
         return awaiting("no released paths report (Module B)")
     n, _vdir, body = r
@@ -393,8 +410,16 @@ _GAP_FIELDS = ("gap_id", "kind", "scope", "source_id", "host", "database", "star
                "consequence_class")
 
 
-def timeline(case: Case, q: TimelineQuery) -> dict:
-    r = released(case, "paths")
+def timeline(case: Case, q: TimelineQuery, gate: TrustGate) -> dict:
+    try:
+        return _timeline(case, q, gate)
+    except IntegrityFailure as exc:
+        return {**gate.failure("paths", exc), "total": None, "offset": q.offset, "limit": q.limit, "events": [],
+                "gaps": []}
+
+
+def _timeline(case: Case, q: TimelineQuery, gate: TrustGate) -> dict:
+    r = released(case, "paths", gate)
     if r is None:
         return {**awaiting("no released paths report (Module B)"), "total": None, "offset": q.offset,
                 "limit": q.limit, "events": [], "gaps": []}
@@ -404,9 +429,12 @@ def timeline(case: Case, q: TimelineQuery) -> dict:
         return {**not_assessed("the released paths report has no timeline attachment"), "total": None,
                 "offset": q.offset, "limit": q.limit, "events": [], "gaps": []}
     amap = asset_map(body)
-    total, events = 0, []
-    with open(path, encoding="utf-8") as fh:  # streamed: only the requested page is kept
-        for line in fh:
+    want = gate.expected("paths", n, "attachments/timeline.jsonl")
+    total, events, digest = 0, [], hashlib.sha256()
+    with open(path, "rb") as fh:  # streamed: only the requested page is kept; hashed against the verified release
+        for raw in fh:
+            digest.update(raw)
+            line = raw.decode("utf-8")
             if not line.strip():
                 continue
             e = json.loads(line)
@@ -415,6 +443,8 @@ def timeline(case: Case, q: TimelineQuery) -> dict:
             if q.offset <= total < q.offset + q.limit:
                 events.append(_event_view(e, amap))
             total += 1
+    if digest.hexdigest() != want:
+        raise gate.mismatch("paths", n, "attachments/timeline.jsonl")
     gaps = [{k: g.get(k) for k in _GAP_FIELDS} for g in body.get("gaps") or [] if _gap_overlaps(g, q)]
     tl = body.get("timeline") or {}
     return {"status": "released", "report_version": n, "total": total, "offset": q.offset, "limit": q.limit,
@@ -512,8 +542,11 @@ def path_view(p: dict, amap: dict[str, str]) -> dict:
                         "evidence_ids": t.get("evidence_ids") or []} for t in p.get("tables") or []]}
 
 
-def paths(case: Case) -> dict:
-    r = released(case, "paths")
+def paths(case: Case, gate: TrustGate) -> dict:
+    try:
+        r = released(case, "paths", gate)
+    except IntegrityFailure as exc:
+        return gate.failure("paths", exc)
     if r is None:
         return awaiting("no released paths report (Module B)")
     n, _vdir, body = r
@@ -588,13 +621,22 @@ def exposure_view(body: dict, paths_body: dict | None) -> dict:
                 "by_finding": refs}}
 
 
-def exposure(case: Case) -> dict:
-    r = released(case, "exposure")
+def exposure(case: Case, gate: TrustGate) -> dict:
+    try:
+        r = released(case, "exposure", gate)
+    except IntegrityFailure as exc:
+        return gate.failure("exposure", exc)
     if r is None:
         return awaiting("no released exposure report (Module A)")
     n, _vdir, body = r
-    p = released(case, "paths")
-    return {"status": "released", "report_version": n, **exposure_view(body, p[2] if p else None)}
+    try:
+        p, paths_alert = released(case, "paths", gate), None
+    except IntegrityFailure as exc:       # Module B cross-references are withheld; Module A stays available
+        p, paths_alert = None, gate.failure("paths", exc)
+    view = exposure_view(body, p[2] if p else None)
+    if paths_alert:
+        view["module_b_cross_references"] = {**view["module_b_cross_references"], **paths_alert, "by_finding": {}}
+    return {"status": "released", "report_version": n, **view}
 
 
 # ------------------------------------------------------------------------------------------------ people
@@ -690,11 +732,18 @@ def people_view(prelim: tuple[int, dict] | None, refined: tuple[int, dict] | Non
     return out
 
 
-def people(case: Case) -> dict:
+def people(case: Case, gate: TrustGate) -> dict:
+    try:
+        return _people(case, gate)
+    except IntegrityFailure as exc:
+        return gate.failure("scope", exc)
+
+
+def _people(case: Case, gate: TrustGate) -> dict:
     rs = ReportStore(case)
     prelim = refined = None
     for n, _p in rs.versions("scope"):
-        r = released(case, "scope", n)
+        r = released(case, "scope", gate, n)
         if r is None:
             continue
         status = r[2].get("report_status")
@@ -710,21 +759,29 @@ def people(case: Case) -> dict:
 
 
 # ------------------------------------------------------------------------------------------------ investigation
-def _evidence_index(case: Case) -> dict[str, set[str]]:
+def _trusted(case: Case, kind: str, gate: TrustGate):
+    try:
+        return released(case, kind, gate)
+    except IntegrityFailure:
+        return None
+
+
+def _evidence_index(case: Case, gate: TrustGate) -> dict[str, set[str]]:
+    """Ids present in the verified released reports (an untrusted report contributes none)."""
     idx: dict[str, set[str]] = {"finding": set(), "path": set(), "table_claim": set(), "anomaly": set(),
                                 "gap": set(), "corroboration": set(), "recommendation": set(),
                                 "indicator_match": set(), "coverage_gap": set(), "scope_tier": set()}
-    e = released(case, "exposure")
+    e = _trusted(case, "exposure", gate)
     if e:
         idx["finding"] = {f.get("finding_id") for f in e[2].get("findings") or []}
         for ctl, cov in (e[2].get("coverage") or {}).items():   # same ids as investigator.bundle (XA-…)
             for u in ((cov or {}).get("not_assessed") or []) + ((cov or {}).get("unavailable") or []):
                 unit = u.get("unit") if isinstance(u, dict) else u
                 idx["coverage_gap"].add("XA-" + hashlib.sha256(f"{ctl}|{unit}".encode()).hexdigest()[:12])
-    sc = released(case, "scope")
+    sc = _trusted(case, "scope", gate)
     if sc:
         idx["scope_tier"] = {f"SCOPE-{t}" for t in (sc[2].get("scope_tiers") or {})}
-    p = released(case, "paths")
+    p = _trusted(case, "paths", gate)
     if p:
         b = p[2]
         idx["path"] = {x.get("path_id") for x in b.get("paths") or []}
@@ -746,12 +803,14 @@ def _fact_module(fid: str) -> str | None:
     return None
 
 
-def resolve_evidence(eid: str, index: dict[str, set[str]]) -> dict:
+def resolve_evidence(eid: str, index: dict[str, set[str]], untrusted: frozenset = frozenset()) -> dict:
     for prefix, (module, typ) in EVIDENCE_PREFIXES.items():
         if eid.startswith(prefix):
             if typ == "quantity":
                 return {"id": eid, "module": _fact_module(eid), "type": typ, "found": None,
                         "note": "a quantity declared in the evidence bundle"}
+            if module in untrusted:
+                return {"id": eid, "module": module, "type": typ, "found": None, "integrity_failure": True}
             return {"id": eid, "module": module, "type": typ, "found": eid in index.get(typ, set()),
                     "section": module}
     return {"id": eid, "module": None, "type": "unknown", "found": False}
@@ -778,28 +837,56 @@ def referenced_ids(result: dict) -> list[str]:
     return ids
 
 
-def investigation(case: Case, store) -> dict:
-    report = released(case, "investigation")
+def _run_integrity(result: dict, gate: TrustGate) -> dict | None:
+    """None if every module report the run was built on is still the verified release; else a failure view."""
+    for ref in result.get("references") or []:
+        kind, n = ref.get("kind"), ref.get("version")
+        if kind not in REPORT_KINDS or not isinstance(n, int):
+            continue
+        try:
+            ok = gate.expected(kind, n, F.REPORT_FILE) == ref.get("report_sha256")
+        except IntegrityFailure as exc:
+            return {**gate.failure(kind, exc), "reason": f"the run was built on the {kind} report, whose chain "
+                                                         f"failed verification: {exc.detail}"}
+        if not ok:
+            return {"status": "integrity_failure", "kind": kind, "warning": gate.failure(kind)["warning"]
+                    .replace("chain failed verification", "version this run cites does not match the verified release"),
+                    "reason": f"{kind} v{n} differs from the report the run was built on", "failed_checks": []}
+    return None
+
+
+def investigation(case: Case, store, gate: TrustGate) -> dict:
+    try:
+        report, report_alert = released(case, "investigation", gate), None
+    except IntegrityFailure as exc:
+        report, report_alert = None, gate.failure("investigation", exc)
     result = None
     if store is not None:
         from tripline_scope.investigator import storage
 
         result = storage.latest_result(store)
-    if report is None and result is None:
+    if report is None and result is None and report_alert is None:
         return {"status": "not_performed", "reason": "no authorised AI analysis has been run for this case",
                 "advisory": True}
-    index = _evidence_index(case)
+    index = _evidence_index(case, gate)
+    untrusted = frozenset(a["kind"] for a in gate.alerts(("exposure", "paths", "scope")))
     out: dict = {"status": "available", "advisory": True,
                  "banner": "Advisory — AI-generated hypotheses, not findings"}
-    if report is not None:
+    if report_alert is not None:
+        out["released_report"] = report_alert
+    elif report is not None:
         n, vdir, body = report
-        rel = release_record(vdir)
+        rel = release_record(gate, "investigation", n, vdir)
         out["released_report"] = {"report_version": n, "report_sha256": rel.get("report_sha256"),
                                   "approved_at": (rel.get("approval") or {}).get("approved_at"),
                                   "approved_by": (rel.get("approval") or {}).get("approver"), "body": body}
     else:
         out["released_report"] = awaiting("no released investigation report")
-    if result is not None:
+    run_alert = _run_integrity(result, gate) if result is not None else None
+    if run_alert is not None:          # the run's hypotheses rest on reports that no longer verify: withheld
+        out["latest_run"] = run_alert
+        out["evidence_links"] = {}
+    elif result is not None:
         prov = result.get("provenance") or {}
         out["latest_run"] = result
         out["provenance"] = prov
@@ -807,7 +894,7 @@ def investigation(case: Case, store) -> dict:
         out["fixture"] = prov.get("provider_kind") == "fixture" or prov.get("is_model_inference") is False
         out["provenance_note"] = ("Deterministic fixture output — not AI inference" if out["fixture"]
                                   else "Model inference (advisory; validated by Tripline's deterministic validator)")
-        out["evidence_links"] = {i: resolve_evidence(i, index) for i in referenced_ids(result)}
+        out["evidence_links"] = {i: resolve_evidence(i, index, untrusted) for i in referenced_ids(result)}
     else:
         out["latest_run"] = not_performed_run()
         out["evidence_links"] = {}
@@ -819,47 +906,47 @@ def not_performed_run() -> dict:
 
 
 # ------------------------------------------------------------------------------------------------ reports
-def verification(case: Case, home, kind: str) -> dict:
-    rs = ReportStore(case)
-    if not rs.versions(kind):
-        return awaiting(f"no released {kind} report")
-    res = rs.verify(kind, home)
-    out = {"ok": bool(res.ok), "checks": len(res.checks),
-           "failed": [c.name for c in res.checks if not c.ok]}
-    if not res.ok:
-        out["render"] = res.render().replace(str(rs.kind_dir(kind)), f"reports/{kind}")
-    return out
-
-
-def reports(case: Case, verified: Mapping[str, dict]) -> dict:
+def reports(case: Case, gate: TrustGate, *, refresh: bool = False) -> dict:
     rs = ReportStore(case)
     kinds = {}
     for kind in REPORT_KINDS:
+        if refresh:
+            gate.check(kind, refresh=True)
         vs = rs.versions(kind)
         if not vs:
             kinds[kind] = {**awaiting(f"no released {kind} report"), "versions": []}
             continue
-        versions = []
-        for n, vdir in vs:
-            rel = release_record(vdir)
-            appr = rel.get("approval") or {}
-            files = [name for name in SERVABLE_FILES if (vdir / name).is_file()]
-            versions.append({"version": n, "report_sha256": rel.get("report_sha256"),
-                             "previous_report_sha256": rel.get("previous_report_sha256"),
-                             "approval": {"approver": appr.get("approver"), "approved_at": appr.get("approved_at"),
-                                          "authentication": appr.get("authentication")},
-                             "provider_cosigned": bool(rel.get("provider_cosigned")),
-                             "artefacts": rel.get("artefacts") or {},
-                             "files": {name: f"/reports/{kind}/v{n}/{name}" for name in files}})
-        kinds[kind] = {"status": "released", "versions": versions,
-                       "verification": verified.get(kind) or not_assessed("not verified yet")}
+        try:
+            gate.require(kind)
+            versions = _report_versions(gate, kind, vs)
+        except IntegrityFailure as exc:   # nothing from an unverified chain is listed or linked
+            kinds[kind] = {**gate.failure(kind, exc), "versions": [], "verification": gate.summary(kind)}
+            continue
+        kinds[kind] = {"status": "released", "versions": versions, "verification": gate.summary(kind)}
     return {"kinds": kinds}
 
 
-def report_file(case: Case, kind: str, version: str, name: str) -> tuple[Path, str] | None:
-    """Resolve a downloadable released file from validated parts only, or None. ``kind`` and ``name`` must be in
-    fixed allow-lists and ``version`` must be ``v<int>`` naming an existing released version; the path is built
-    from the allow-listed constants and the directory ``ReportStore`` lists, never from the request strings."""
+def _report_versions(gate: TrustGate, kind: str, vs) -> list[dict]:
+    versions = []
+    for n, vdir in vs:
+        rel = release_record(gate, kind, n, vdir)
+        appr = rel.get("approval") or {}
+        files = [name for name in SERVABLE_FILES if (vdir / name).is_file()]
+        versions.append({"version": n, "report_sha256": rel.get("report_sha256"),
+                         "previous_report_sha256": rel.get("previous_report_sha256"),
+                         "approval": {"approver": appr.get("approver"), "approved_at": appr.get("approved_at"),
+                                      "authentication": appr.get("authentication")},
+                         "provider_cosigned": bool(rel.get("provider_cosigned")),
+                         "artefacts": rel.get("artefacts") or {},
+                         "files": {name: f"/reports/{kind}/v{n}/{name}" for name in files}})
+    return versions
+
+
+def report_file(case: Case, kind: str, version: str, name: str, gate: TrustGate) -> tuple[bytes, str] | None:
+    """The bytes of a downloadable released file, from validated parts only, or None. ``kind`` and ``name`` must
+    be in fixed allow-lists and ``version`` must be ``v<int>`` naming an existing released version; the path is
+    built from the allow-listed constants and the directory ``ReportStore`` lists, never from the request strings.
+    The bytes must match the verified release (raises IntegrityFailure otherwise)."""
     if kind not in REPORT_KINDS:
         return None
     kind_const = REPORT_KINDS[REPORT_KINDS.index(kind)]
@@ -876,4 +963,4 @@ def report_file(case: Case, kind: str, version: str, name: str) -> tuple[Path, s
     p = vdir / names[name]
     if not p.is_file() or p.is_symlink():
         return None
-    return p, SERVABLE_FILES[names[name]]
+    return gate.read_bytes(kind_const, int(m.group(1)), vdir, names[name]), SERVABLE_FILES[names[name]]

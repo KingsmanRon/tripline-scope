@@ -36,6 +36,7 @@ from tripline_scope.core.errors import ConfigError, TriplineError
 
 from . import data as D
 from . import page as P
+from .integrity import IntegrityFailure, TrustGate
 
 SESSION_COOKIE = "tscope_dashboard"
 LOGIN_COOKIE = "tscope_dashboard_login"
@@ -97,7 +98,7 @@ class DashboardState:
         self.case, self.store, self.home, self.port = case, store, home, port
         self.sessions: dict[str, dict] = {}
         self.login_tokens: dict[str, float] = {}
-        self.verified: dict[str, dict] = {}
+        self.gate = TrustGate(case, home)      # every released file is verified before it is used
 
     def prune(self, now: float) -> None:
         for tok, s in list(self.sessions.items()):
@@ -167,7 +168,8 @@ def create_app(case, store, home, *, port: int = DEFAULT_PORT, host: str = DEFAU
         return s, None
 
     def ok(payload) -> JSONResponse:
-        return JSONResponse(D.scrub(payload))
+        # every view carries the current integrity alerts, so a failed chain is announced on every page
+        return JSONResponse(D.scrub({**payload, "integrity_alerts": st.gate.alerts(D.REPORT_KINDS)}))
 
     def login_page(status: int = 200, error: str | None = None) -> HTMLResponse:
         now = _clock()
@@ -243,7 +245,7 @@ def create_app(case, store, home, *, port: int = DEFAULT_PORT, host: str = DEFAU
         s, err = view(request, "overview")
         if err:
             return err
-        return ok({**D.overview(case), "user": s["user"], "roles": s["roles"]})
+        return ok({**D.overview(case, st.gate), "user": s["user"], "roles": s["roles"]})
 
     @app.get("/api/timeline")
     def api_timeline(request: Request):
@@ -257,27 +259,27 @@ def create_app(case, store, home, *, port: int = DEFAULT_PORT, host: str = DEFAU
             q = D.parse_timeline_query(params)
         except D.BadRequest as exc:
             return denied(400, str(exc))
-        return ok(D.timeline(case, q))
+        return ok(D.timeline(case, q, st.gate))
 
     @app.get("/api/paths")
     def api_paths(request: Request):
         s, err = view(request, "paths")
-        return err or ok(D.paths(case))
+        return err or ok(D.paths(case, st.gate))
 
     @app.get("/api/exposure")
     def api_exposure(request: Request):
         s, err = view(request, "exposure")
-        return err or ok(D.exposure(case))
+        return err or ok(D.exposure(case, st.gate))
 
     @app.get("/api/people")
     def api_people(request: Request):
         s, err = view(request, "people")
-        return err or ok(D.people(case))
+        return err or ok(D.people(case, st.gate))
 
     @app.get("/api/investigation")
     def api_investigation(request: Request):
         s, err = view(request, "investigation")
-        return err or ok(D.investigation(case, store))
+        return err or ok(D.investigation(case, store, st.gate))
 
     @app.get("/api/reports")
     def api_reports(request: Request):
@@ -287,22 +289,23 @@ def create_app(case, store, home, *, port: int = DEFAULT_PORT, host: str = DEFAU
         refresh = request.query_params.get("refresh", "0")
         if refresh not in ("0", "1") or set(request.query_params) - {"refresh"}:
             return denied(400, "refresh must be 0 or 1")
-        for kind in D.REPORT_KINDS:
-            if refresh == "1" or kind not in st.verified:
-                st.verified[kind] = D.verification(case, home, kind)
-        return ok(D.reports(case, st.verified))
+        return ok(D.reports(case, st.gate, refresh=refresh == "1"))
 
     @app.get("/reports/{kind}/{version}/{name}")
     def report_download(kind: str, version: str, name: str, request: Request):
         s = session(request)
         if s is None:
             return denied(401, "sign in")
-        found = D.report_file(case, kind, version, name)
+        try:
+            found = D.report_file(case, kind, version, name, st.gate)
+        except IntegrityFailure as exc:
+            return JSONResponse({"error": st.gate.failure(exc.kind, exc)["warning"], "status": "integrity_failure"},
+                                status_code=409)
         if found is None:
             return denied(404, "not found")
-        path, ctype = found
+        data, ctype = found
         headers = {"Content-Disposition": f'attachment; filename="{kind}-{version}-{name}"'}
-        return Response(path.read_bytes(), media_type=ctype, headers=headers)
+        return Response(data, media_type=ctype, headers=headers)
 
     return app
 

@@ -67,8 +67,8 @@ def test_missing_source_families_are_listed():
 
     orig = mod.released
     try:
-        mod.released = lambda case, kind, version=None: (1, None, body)
-        mb = mod._module_b_coverage(FakeCase())
+        mod.released = lambda case, kind, gate, version=None: (1, None, body)
+        mb = mod._module_b_coverage(FakeCase(), None)
     finally:
         mod.released = orig
     groups = [m["group"] for m in mb["missing_source_families"]]
@@ -327,7 +327,7 @@ def test_nothing_released_is_never_zero(empty_case):
     assert p["preliminary_estimate"]["status"] == "awaiting_analysis" and p["refined"]["status"] == "awaiting_analysis"
     i = c.get("/api/investigation").json()
     assert i == {"status": "not_performed", "reason": "no authorised AI analysis has been run for this case",
-                 "advisory": True}
+                 "advisory": True, "integrity_alerts": []}
     rep = c.get("/api/reports").json()
     assert all(k["status"] == "awaiting_analysis" and k["versions"] == [] for k in rep["kinds"].values())
     for path in API:  # no count anywhere is a bare 0 standing in for "missing"

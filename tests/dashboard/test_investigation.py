@@ -4,6 +4,7 @@ deterministic fixture output, with its evidence ids resolved against the release
 import pytest
 from dashkit import audit, report, signed_in
 
+from tripline_scope.core.canonical import sha256_file
 from tripline_scope.dashboard import data as D
 from tripline_scope.investigator import storage
 
@@ -24,7 +25,8 @@ def fixture_run(dash, built):
     result = {
         "schema": "tripline.investigation/v1", "case_id": case.case_id, "run_id": RUN,
         "created_at": "2026-10-17T08:00:00Z", "analysis_status": "completed", "status_reason": None,
-        "references": [{"kind": "paths", "version": 1, "report_sha256": "a" * 64}],
+        "references": [{"kind": "paths", "version": 1,
+                        "report_sha256": sha256_file(built.case_dir / "reports" / "paths" / "v0001" / "report.json")}],
         "not_assessed_modules": [], "bundle_sha256": "b" * 64, "method_version": "investigator/1.0.0",
         "validator_version": "validator/1.0.0",
         "provenance": {"provider": "fixture", "provider_kind": "fixture", "model_id": "tripline-fixture",
@@ -72,7 +74,7 @@ def test_not_performed_without_a_run(dash):
     c = signed_in(case, store, home)
     r = c.get("/api/investigation").json()
     assert r == {"status": "not_performed", "reason": "no authorised AI analysis has been run for this case",
-                 "advisory": True}
+                 "advisory": True, "integrity_alerts": []}
 
 
 def test_fixture_result_is_advisory_and_resolves_evidence(dash, fixture_run):

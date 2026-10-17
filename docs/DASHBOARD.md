@@ -48,6 +48,19 @@ Ctrl+C. `--host` accepts only `127.0.0.1` (default), `localhost` and `::1`; anyt
 Only **released** report versions are read (`reports/<kind>/vNNNN/`), except the AI Investigator section,
 which also reads the investigator's latest validated run from the encrypted case store.
 
+**Integrity gate.** No released data is used before its report chain verifies (`dashboard/integrity.py`): for each
+kind the workbench runs the same chain check as `tscope-verify` (hospital signature on every version, signed
+artefact hashes including `attachments/timeline.jsonl`, no unsigned files, contiguous versions linked by
+`previous_report_sha256`, one case id) and records the hash of every verified file. Every read is then bound to
+those hashes: `report.json`, `release.json`, the timeline (hashed while it is streamed) and downloads are refused if
+their bytes differ from what was verified, even if they changed after verification. The result is cached per kind
+against a fingerprint of the released files (path, type, size, mtime, ctime, inode), so any change — including one
+that restores the modification time — triggers re-verification on the next request. On failure the affected kind
+is answered with `{"status": "integrity_failure", "warning": "INTEGRITY FAILURE: …"}`: none of its findings are
+shown, its files are not served (HTTP 409), Module A's cross-references to a failed Module B report are withheld,
+and an investigator run built on a failed (or changed) report is withheld. Every API response carries
+`integrity_alerts`, shown as a red banner on every page. Other kinds stay available.
+
 | Section | Reads | Shows |
 |---|---|---|
 | A · Overview (`/api/overview`) | `case.yaml`, case state, the released versions and `release.json` of `exposure`, `paths`, `scope`, `investigation`, `readiness`; the released `paths` report | case id, mode, incident window, open/closed, legal hold; per report kind: released versions, latest hash, report status, approver and time, whether an unreleased draft exists (its content is never shown); evidence state (sources registered, latest source received/registered time, latest release approval); Module B coverage (log families present, missing family groups, gaps by kind, sources not complete, what logs cannot cover). No overall score is computed. |
@@ -56,7 +69,7 @@ which also reads the investigator's latest validated run from the encrypted case
 | D · Exposure (`/api/exposure`) | released `exposure` report; `containment.recommendations[].module_a_refs` of the released `paths` report | findings (rank, severity, control, rule, title, asset, state, suggested fix, confidence, basis), summary counts, coverage per control (assessed units, not assessed, unavailable); Module B recommendation ids that cite a finding, labelled "cross-referenced by Module B containment advice; not evidence of causation". |
 | E · People (`/api/people`) | released `scope` reports: the latest `preliminary` and the latest `refined` version | preliminary estimate (point and bounds) with its measured error; refined counts and bounds, the four scope tiers (observed access, possible exposure, confirmed exfiltration, notification scope with who decided), people per category, notification routes, unresolvable rows (total and per source), matching bands/rules/review queue, measured error rates. Counts only. |
 | F · AI Investigator (`/api/investigation`) | the latest released `investigation` report, and the latest completed run via `investigator.storage.latest_result` | always under the banner "Advisory — AI-generated hypotheses, not findings"; run, provenance and validator counts; each hypothesis with statement, basis, consequence class, supporting and contradicting evidence (each id resolved to its module and type, and flagged if it is not in the released report), confidence label and rationale, alternatives, tests, what cannot be concluded, quantities, review status; missing evidence, next steps, remediation, unproven assertions. Output of the deterministic fixture provider (`is_model_inference: false`) is labelled "Deterministic fixture output — not AI inference". With neither a run nor a report: "Not performed — no authorised AI analysis has been run for this case". |
-| G · Reports (`/api/reports`) | every released version of the five kinds | report hash, previous hash, approver/time/authentication, provider co-signature, artefact hashes, links to the files, and signature + hash + chain verification (`ReportStore.verify`, the same checks as `tscope-verify`). Verification is computed once per server start and on demand with "Re-verify" (`?refresh=1`); a failure shows the failing checks. |
+| G · Reports (`/api/reports`) | every released version of the five kinds | report hash, previous hash, approver/time/authentication, provider co-signature, artefact hashes, links to the files, and signature + hash + chain verification (`ReportStore.verify`, the same checks as `tscope-verify`) from the integrity gate: re-run whenever the released files change and on demand with "Re-verify" (`?refresh=1`). A failed kind lists no versions or files; it shows the warning and the failing checks. |
 
 Files can be downloaded only as `/reports/{kind}/v{n}/{name}` with `kind` one of `exposure`, `paths`, `scope`,
 `investigation`, `readiness`, `n` an existing released version, and `name` one of `report.json`, `report.pdf`,
@@ -182,7 +195,7 @@ violations and no request to any other origin. That browser check is not part of
 
 ## 8. Operational limitations
 
-* **Single process, in-memory state.** Sessions and the verification cache live in the server process;
+* **Single process, in-memory state.** Sessions and the integrity gate's verification cache live in the server process;
   restarting it signs everyone out. At most 64 sessions are kept (the oldest is dropped).
 * **Loopback only, by design.** There is no option to listen on a network interface; remote viewing is not
   supported. In container mode the container's loopback is not reachable from the host; this mode has not
