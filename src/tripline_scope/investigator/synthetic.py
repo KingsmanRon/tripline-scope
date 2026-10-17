@@ -70,14 +70,17 @@ def registered(home) -> dict[str, dict]:
     return entries
 
 
-def _files(paths) -> list[Path]:
+def _hashes(paths) -> list[str]:
+    """Content hashes of files, and for symbolic links the hash of the link text (as custody records them)."""
     out = []
     for p in paths:
         p = Path(p)
-        if p.is_file():
-            out.append(p)
-        elif p.is_dir():
-            out += sorted(f for f in p.rglob("*") if f.is_file() and not f.is_symlink())
+        items = [p] if (p.is_file() or p.is_symlink()) else sorted(p.rglob("*")) if p.is_dir() else []
+        for f in items:
+            if f.is_symlink():
+                out.append(sha256_hex(os.readlink(f).encode()))
+            elif f.is_file():
+                out.append(sha256_file(f))
     return out
 
 
@@ -85,20 +88,20 @@ def attest_outputs(home, generator: str, params: dict, paths) -> int:
     """Record the hashes of files a synthetic generator has just written. Returns the number of files."""
     if generator not in GENERATORS:
         raise ConfigError(f"unknown synthetic generator {generator!r}")
-    files = _files(paths)
+    hashes = _hashes(paths)
     psha = sha256_hex(canonical_bytes({"generator": generator, "params": params}))
     with _locked(home):
         entries = registered(home)
         at = now_iso()
-        for f in files:
-            entries.setdefault(sha256_file(f), {"generator": generator, "params_sha256": psha, "attested_at": at})
+        for h in hashes:
+            entries.setdefault(h, {"generator": generator, "params_sha256": psha, "attested_at": at})
         doc = {"schema": SCHEMA, "entries": entries, "mac": _mac(home, entries)}
         tmp = _path(home).with_suffix(".tmp")
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "wb") as fh:
             fh.write(canonical_bytes(doc))
         os.replace(tmp, _path(home))
-    return len(files)
+    return len(hashes)
 
 
 def _source_hashes(case, store, src: dict) -> list[tuple[str, str | None]]:
@@ -112,7 +115,7 @@ def _source_hashes(case, store, src: dict) -> list[tuple[str, str | None]]:
                 out.append((f"{src['source_id']}/{f.get('name')}", None))
                 continue
             for t in tree:
-                out.append((f"{src['source_id']}/{t.get('name')}", None if t.get("symlink") else t.get("sha256")))
+                out.append((f"{src['source_id']}/{t.get('name')}", t.get("target_hash") if t.get("symlink") else t.get("sha256")))
         else:
             out.append((f"{src['source_id']}/{f.get('name')}", f.get("sha256")))
     return out
