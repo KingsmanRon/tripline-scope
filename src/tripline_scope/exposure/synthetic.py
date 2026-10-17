@@ -1,17 +1,35 @@
 """Synthetic Module A fixtures (tests, drills, demo). Never used on real data.
 
-``build(out, variant)`` writes a complete scan input set: snapshot roots (IIS web root with a minified bundle,
-proxy configuration, a file share with stale exports, backups and archives, a repository with history), catalogue
-exports (SQL Server JSON, PostgreSQL CSV directory, an unsupported engine), identity exports with gaps, a
-supplier register, an asset map and the manifest, plus ``ground_truth.json`` (outside every root) listing the
-seeded secrets, seeded SA ID numbers and the expected findings. ``variant="fixed"`` remediates a subset of the
-flaws so a re-scan shows verified ``mitigated`` deltas; with the same seed every unchanged secret is identical.
+``build(out, variant, seed, estate)`` writes a complete scan input set: snapshot roots (IIS web root with a
+minified bundle, proxy configuration, a file share with stale exports, backups and archives, a repository with
+history), catalogue exports (SQL Server JSON, PostgreSQL CSV directory, an unsupported engine), identity exports
+with gaps, a supplier register, an asset map and the manifest, plus ``ground_truth.json`` (outside every root)
+listing the seeded secrets, seeded SA ID numbers and the expected findings. ``variant="fixed"`` remediates a
+subset of the flaws so a re-scan shows verified ``mitigated`` deltas; with the same seed every unchanged secret is
+identical.
+
+``estate="hospital"`` (the default) is the original synthetic hospital estate used by the Module A tests.
+``estate="lab"`` writes the same seeded weaknesses (same PRNG sequence, same files) onto Module B's synthetic
+laboratory estate (:mod:`tripline_scope.paths.synthetic`): asset ids ``AST-LABSQL01``, ``AST-LABSQL02``,
+``AST-WEB01``, ``AST-GW01``, ``AST-DC01``, ``AST-LISPG01``, accounts in the ``LAB\\`` / ``lab.example`` domain and
+the supplier login ``vendor.support``, so cross-module joins (asset id, principal) resolve. Only names differ
+between the estates; they are parameters of :class:`Estate`, never rewrites of generated output.
 
 All secret-shaped values are generated from a seeded PRNG at build time; none is a real credential.
+
+CLI (used by the unified demo)::
+
+    python -m tripline_scope.exposure.synthetic --out DIR [--estate hospital|lab] [--variant baseline|fixed]
+        [--seed N] [--attest]
+
+``--attest`` records the hashes of every written file in the installation's synthetic-origin registry
+(:mod:`tripline_scope.investigator.synthetic`, generator ``exposure-estate``); it needs ``TSCOPE_HOME`` and the
+KEK passphrase.
 """
 
 from __future__ import annotations
 
+import argparse
 import base64
 import csv
 import datetime as dt
@@ -22,6 +40,7 @@ import random
 import string
 import zipfile
 import zlib
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -37,6 +56,47 @@ LAST = ["Nkosi", "Botha", "Mokoena", "Naidoo", "van der Merwe", "Dlamini", "Pill
         "Govender", "Jacobs", "Ndlovu", "Fourie"]
 TESTS = [("FBC", "Full blood count"), ("HBA1C", "HbA1c"), ("CD4", "CD4 count"), ("UE", "Urea and electrolytes")]
 ICD = ["E11.9", "B20", "I10", "J45.9", "N18.3"]
+
+
+@dataclass(frozen=True)
+class Estate:
+    """Names of one synthetic estate. Every weakness, secret and file is identical between estates."""
+
+    name: str
+    netbios: str                 # Windows domain prefix of directory accounts
+    domain: str                  # DNS / UPN domain
+    vendor_login: str            # supplier SQL login
+    sql_id: str                  # manifest id of the SQL Server catalogue
+    sql_server: str
+    sql_database: str
+    sql_asset: str
+    pg_id: str
+    pg_server: str
+    pg_database: str
+    pg_asset: str
+    pg_host: str                 # database host named in the web root's .env
+    audit_name: str              # server audit name (fixed variant)
+    scan_id: str
+    owner: str
+    supplied_by: str
+    patient_data_assets: tuple[str, ...]
+    assets: tuple[dict, ...]
+    # Symlink traversal fixtures (loop, escape, decoy link) exercise the walker's guardrails; they are not weaknesses.
+    # The lab estate omits them so that every file of the demo case's sources is a regular file whose content hash
+    # is in the synthetic-origin registry (custody records a link by its link text only, with no content hash).
+    guardrail_links: bool = True
+
+    def p(self, name: str | None) -> str | None:
+        """A principal of the reference (hospital) estate renamed into this estate."""
+        if name == "vendor_support":
+            return self.vendor_login
+        if name and name.startswith("HOSP\\"):
+            return f"{self.netbios}\\{name[5:]}"
+        return name
+
+    def db(self, db_id: str | None) -> str | None:
+        """A manifest database id of the reference estate renamed into this estate."""
+        return {"labdb": self.sql_id, "pathdb": self.pg_id}.get(db_id, db_id) if db_id else db_id
 
 
 class _Gen:
@@ -111,19 +171,19 @@ def _pem(g: _Gen) -> str:
 
 
 # ------------------------------------------------------------------------------------------ roots
-def _web_root(base: Path, g: _Gen, fixed: bool, truth: list) -> None:
+def _web_root(base: Path, g: _Gen, fixed: bool, truth: list, E: Estate) -> None:
     w = base / "wwwroot"
     pw_lab = g.password("web_config_lab_app")
     pw_smtp = g.password("web_config_smtp")
     vkey = g.secret("machine_validation_key", g.s("0123456789ABCDEF", 128))
     dkey = g.secret("machine_decryption_key", g.s("0123456789ABCDEF", 64))
-    conn = ("Server=LABSQL01;Database=LabDB;Integrated Security=true;" if fixed else
-            f"Server=LABSQL01;Database=LabDB;User ID=lab_app;Password={pw_lab};")
+    srv = f"Server={E.sql_server};Database={E.sql_database};"
+    conn = f"{srv}Integrated Security=true;" if fixed else f"{srv}User ID=lab_app;Password={pw_lab};"
     _write(w / "web.config", f"""<?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <connectionStrings>
     <add name="LabDb" connectionString="{conn}" providerName="System.Data.SqlClient" />
-    <add name="Reporting" connectionString="Server=LABSQL01;Database=LabDB;Integrated Security=true;" />
+    <add name="Reporting" connectionString="{srv}Integrated Security=true;" />
   </connectionStrings>
   <appSettings>
     <add key="SmtpPassword" value="{pw_smtp}" />
@@ -158,7 +218,7 @@ def _web_root(base: Path, g: _Gen, fixed: bool, truth: list) -> None:
     if not fixed:
         pw_env = g.password("env_db_password")
         app_key = g.secret("env_app_key", base64.b64encode(bytes(g.rng.randrange(256) for _ in range(32))).decode())
-        _write(w / ".env", f"APP_ENV=production\nDB_HOST=pathdb.hosp.example\nDB_PASSWORD={pw_env}\nAPP_KEY=base64:{app_key}\n")
+        _write(w / ".env", f"APP_ENV=production\nDB_HOST={E.pg_host}\nDB_PASSWORD={pw_env}\nAPP_KEY=base64:{app_key}\n")
         truth += [{"rule_id": "A1.generic-password", "root": "web01", "path": "wwwroot/.env", "severity": "high",
                    "fixed_in_variant": True},
                   {"rule_id": "A1.generic-signing-key", "root": "web01", "path": "wwwroot/.env", "severity": "critical",
@@ -185,17 +245,18 @@ def _web_root(base: Path, g: _Gen, fixed: bool, truth: list) -> None:
     _write(w / "downloads" / "patient_list.csv", _csv(rows))
     truth.append({"rule_id": "A3.data-copy", "root": "web01", "path": "wwwroot/downloads/patient_list.csv",
                   "severity": "critical"})
-    (w / "js" / "current").symlink_to(".", target_is_directory=True)
-    (w / "escape").symlink_to(Path("..") / ".." / ".." / "outside", target_is_directory=True)
+    if E.guardrail_links:
+        (w / "js" / "current").symlink_to(".", target_is_directory=True)
+        (w / "escape").symlink_to(Path("..") / ".." / ".." / "outside", target_is_directory=True)
 
 
-def _proxy_root(base: Path, g: _Gen, truth: list) -> None:
+def _proxy_root(base: Path, g: _Gen, truth: list, E: Estate) -> None:
     basic = base64.b64encode(f"proxyuser:{g.password('nginx_basic_password')}".encode()).decode()
     fcgi = g.password("nginx_fastcgi_password")
     _write(base / "nginx" / "nginx.conf", f"""server {{
     listen 443 ssl;
     location /lis/ {{
-        proxy_pass http://lis.hosp.example:8080/;
+        proxy_pass http://lis.{E.domain}:8080/;
         proxy_set_header Authorization "Basic {basic}";
     }}
     location ~ \\.php$ {{
@@ -205,14 +266,14 @@ def _proxy_root(base: Path, g: _Gen, truth: list) -> None:
 """)
     setenv = g.password("apache_setenv_password")
     _write(base / "apache2" / "sites-enabled" / "portal.conf",
-           f'<VirtualHost *:443>\n  ServerName portal.hosp.example\n  SetEnv DB_PASS "{setenv}"\n</VirtualHost>\n')
+           f'<VirtualHost *:443>\n  ServerName portal.{E.domain}\n  SetEnv DB_PASS "{setenv}"\n</VirtualHost>\n')
     truth += [{"rule_id": "A1.basic-auth-header", "root": "proxy01", "path": "nginx/nginx.conf", "severity": "low"},
               {"rule_id": "A1.generic-password", "root": "proxy01", "path": "nginx/nginx.conf", "severity": "low"},
               {"rule_id": "A1.generic-password", "root": "proxy01", "path": "apache2/sites-enabled/portal.conf",
                "severity": "low"}]
 
 
-def _share_root(base: Path, g: _Gen, fixed: bool, truth: list) -> None:
+def _share_root(base: Path, g: _Gen, fixed: bool, truth: list, E: Estate) -> None:
     ex = base / "Lab" / "Exports"
     rows = [["PatientNo", "ID Number", "Surname", "First Name", "DOB", "Test", "Result"]]
     for i in range(150):
@@ -275,8 +336,9 @@ def _share_root(base: Path, g: _Gen, fixed: bool, truth: list) -> None:
         fh.truncate(3 << 20)
     os.utime(big, (RECENT, RECENT))
     os.mkfifo(base / "Lab" / "pipe")
-    decoy = (base / ".." / ".." / "outside" / "secret.config").resolve()
-    (base / "link_to_decoy.config").symlink_to(decoy)
+    if E.guardrail_links:
+        decoy = (base / ".." / ".." / "outside" / "secret.config").resolve()
+        (base / "link_to_decoy.config").symlink_to(decoy)
 
 
 def _git_loose(content: bytes) -> tuple[str, bytes]:
@@ -287,7 +349,7 @@ def _git_loose(content: bytes) -> tuple[str, bytes]:
     return sha, zlib.compress(raw)
 
 
-def _repo_root(base: Path, g: _Gen, truth: list) -> None:
+def _repo_root(base: Path, g: _Gen, truth: list, E: Estate) -> None:
     django = g.secret("django_secret_key", g.s(string.ascii_lowercase + string.digits + "!@#$%^&*(-_=+)", 50))
     _write(base / "app" / "settings.py", f"import os\nSECRET_KEY = '{django}'\nDEBUG = False\n"
                                          "DATABASES = {'default': {'PASSWORD': os.environ.get('DB_PASSWORD')}}\n")
@@ -297,11 +359,12 @@ def _repo_root(base: Path, g: _Gen, truth: list) -> None:
     ps = g.password("deploy_ps_password")
     sqlcmd = g.password("deploy_sqlcmd_password")
     _write(base / "deploy" / "deploy.ps1", f'$pw = ConvertTo-SecureString "{ps}" -AsPlainText -Force\n'
-                                           f"sqlcmd -S LABSQL01 -U svc_backup -P '{sqlcmd}' -Q \"BACKUP DATABASE LabDB TO DISK='D:\\b.bak'\"\n")
+                                           f"sqlcmd -S {E.sql_server} -U svc_backup -P '{sqlcmd}' -Q \"BACKUP DATABASE "
+                                           f"{E.sql_database} TO DISK='D:\\b.bak'\"\n")
     truth += [{"rule_id": "A1.powershell-plaintext", "root": "repo01", "path": "deploy/deploy.ps1", "severity": "medium"},
               {"rule_id": "A1.cli-password", "root": "repo01", "path": "deploy/deploy.ps1", "severity": "high"}]
     tok = g.secret("git_remote_token", "ghp_" + g.s(string.ascii_letters + string.digits, 36))
-    _write(base / ".git" / "config", f'[core]\n\tbare = false\n[remote "origin"]\n\turl = https://ci-bot:{tok}@git.hosp.example/lis/app.git\n')
+    _write(base / ".git" / "config", f'[core]\n\tbare = false\n[remote "origin"]\n\turl = https://ci-bot:{tok}@git.{E.domain}/lis/app.git\n')
     truth.append({"rule_id": "A1.github-token", "root": "repo01", "path": ".git/config", "severity": "medium"})
     akid = g.secret("aws_key_id", "AKIA" + g.s("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", 16))
     asec = g.secret("aws_secret", g.s(string.ascii_letters + string.digits + "/+", 40))
@@ -317,29 +380,31 @@ def _repo_root(base: Path, g: _Gen, truth: list) -> None:
 
 
 # ------------------------------------------------------------------------------------------ catalogues
-def _mssql_catalog(fixed: bool) -> dict:
+def _mssql_catalog(fixed: bool, E: Estate) -> dict:
     sp = [("sa", "S", 0, "0x01"), ("lab_app", "S", 0, "0x10"), ("lab_reporting", "S", 0, "0x11"),
           ("etl_report", "S", 0, "0x12"), ("vendor_support", "S", 0, "0x13"), ("HOSP\\svc_backup", "U", 0, "0x14"),
           ("HOSP\\jdoe", "U", 0, "0x15"), ("HOSP\\mleft", "U", 0, "0x16"), ("HOSP\\olduser", "U", 0, "0x17"),
           ("HOSP\\tmokoena", "U", 0, "0x18"), ("HOSP\\reception", "U", 0, "0x19"), ("HOSP\\LabVendors", "G", 0, "0x1A"),
           ("sysadmin", "R", 0, None), ("securityadmin", "R", 0, None), ("bulkadmin", "R", 0, None), ("public", "R", 0, None)]
+    sp = [(E.p(n), t, d, s) for n, t, d, s in sp]
+    db = E.sql_database
     q: dict = {
         "server_info": [{"product_version": "16.0.4305.5", "edition": "Developer Edition (64-bit)",
-                         "integrated_security_only": 0, "server_name": "LABSQL01"}],
+                         "integrated_security_only": 0, "server_name": E.sql_server}],
         "server_principals": [{"name": n, "type": t, "is_disabled": d, "sid": s} for n, t, d, s in sp],
         "sql_logins": [{"name": "sa", "is_policy_checked": 1, "is_expiration_checked": 1, "is_disabled": 0},
                        {"name": "lab_app", "is_policy_checked": 0, "is_expiration_checked": 0, "is_disabled": 0},
                        {"name": "lab_reporting", "is_policy_checked": 1, "is_expiration_checked": 0, "is_disabled": 0},
                        {"name": "etl_report", "is_policy_checked": 1, "is_expiration_checked": 0, "is_disabled": 0},
-                       {"name": "vendor_support", "is_policy_checked": 1, "is_expiration_checked": 1, "is_disabled": 0}],
-        "server_role_members": [{"role_name": "sysadmin", "member_name": m} for m in ("sa", "lab_app", "HOSP\\jdoe")]
+                       {"name": E.vendor_login, "is_policy_checked": 1, "is_expiration_checked": 1, "is_disabled": 0}],
+        "server_role_members": [{"role_name": "sysadmin", "member_name": m} for m in ("sa", "lab_app", E.p("HOSP\\jdoe"))]
                                + [{"role_name": "bulkadmin", "member_name": "etl_report"}],
-        "server_permissions": [{"grantee": "HOSP\\svc_backup", "class_desc": "SERVER", "permission_name": "CONTROL SERVER",
+        "server_permissions": [{"grantee": E.p("HOSP\\svc_backup"), "class_desc": "SERVER", "permission_name": "CONTROL SERVER",
                                 "state_desc": "GRANT"}] + [{"grantee": n, "class_desc": "SERVER",
                                                             "permission_name": "CONNECT SQL", "state_desc": "GRANT"}
                                                            for n, t, _, _ in sp if t != "R"],
         "databases": [{"name": "master", "owner_login": "sa", "is_trustworthy_on": 1, "is_db_chaining_on": 1},
-                      {"name": "LabDB", "owner_login": "sa", "is_trustworthy_on": 0 if fixed else 1, "is_db_chaining_on": 0}],
+                      {"name": db, "owner_login": "sa", "is_trustworthy_on": 0 if fixed else 1, "is_db_chaining_on": 0}],
         "configurations": [{"name": "xp_cmdshell", "value_in_use": 0 if fixed else 1},
                            {"name": "clr enabled", "value_in_use": 0}, {"name": "clr strict security", "value_in_use": 1},
                            {"name": "Ole Automation Procedures", "value_in_use": 0},
@@ -349,12 +414,12 @@ def _mssql_catalog(fixed: bool) -> dict:
                             "is_rpc_out_enabled": 1, "is_data_access_enabled": 1}],
         "linked_logins": [{"linked_server": "FINSQL02", "uses_self_credential": 0, "remote_name": "fin_link",
                            "local_principal": None}],
-        "server_audits": [{"name": "HospitalAudit", "type_desc": "FILE", "on_failure_desc": "CONTINUE",
+        "server_audits": [{"name": E.audit_name, "type_desc": "FILE", "on_failure_desc": "CONTINUE",
                            "is_state_enabled": 1}] if fixed else [],
-        "server_audit_specifications": [{"specification": "Logins", "audit_name": "HospitalAudit", "is_state_enabled": 1,
+        "server_audit_specifications": [{"specification": "Logins", "audit_name": E.audit_name, "is_state_enabled": 1,
                                          "audit_action_name": a} for a in ("FAILED_LOGIN_GROUP", "SUCCESSFUL_LOGIN_GROUP")]
         if fixed else [],
-        "database_audit_specifications": [{"database_name": "LabDB", "specification": "PatientAccess",
+        "database_audit_specifications": [{"database_name": db, "specification": "PatientAccess",
                                            "is_state_enabled": 1, "audit_action_name": "SCHEMA_OBJECT_ACCESS_GROUP"}]
         if fixed else [],
         "credentials": [],
@@ -369,39 +434,40 @@ def _mssql_catalog(fixed: bool) -> dict:
              ("HOSP\\tmokoena", "U", "WINDOWS", "HOSP\\tmokoena", "0x18"),
              ("HOSP\\reception", "U", "WINDOWS", "HOSP\\reception", "0x19"),
              ("HOSP\\LabVendors", "G", "WINDOWS", "HOSP\\LabVendors", "0x1A"), ("orphan_user", "S", "INSTANCE", None, "0x99")]
-    q["database_principals"] = [{"database_name": "LabDB", "name": n, "type": t, "authentication_type_desc": a,
+    users = [(E.p(n), t, a, E.p(ln), s) for n, t, a, ln, s in users]
+    q["database_principals"] = [{"database_name": db, "name": n, "type": t, "authentication_type_desc": a,
                                  "login_name": ln, "sid": s, "is_fixed_role": 0} for n, t, a, ln, s in users] + [
-        {"database_name": "LabDB", "name": r, "type": "R", "authentication_type_desc": "NONE", "login_name": None,
+        {"database_name": db, "name": r, "type": "R", "authentication_type_desc": "NONE", "login_name": None,
          "sid": None, "is_fixed_role": 1 if r != "public" else 0}
         for r in ("db_owner", "db_datareader", "db_datawriter", "db_ddladmin", "public")]
-    readers = ["lab_reporting", "etl_report", "vendor_support", "HOSP\\mleft", "HOSP\\olduser", "HOSP\\tmokoena",
-               "HOSP\\reception", "HOSP\\LabVendors", "orphan_user"]
-    writers = ["etl_report"] + ([] if fixed else ["vendor_support"])
-    q["database_role_members"] = ([{"database_name": "LabDB", "role_name": "db_owner", "member_name": "lab_app"}]
-                                  + [{"database_name": "LabDB", "role_name": "db_datareader", "member_name": m} for m in readers]
-                                  + [{"database_name": "LabDB", "role_name": "db_datawriter", "member_name": m} for m in writers])
-    perms = [{"database_name": "LabDB", "grantee": n, "class_desc": "DATABASE", "permission_name": "CONNECT",
+    readers = [E.p(m) for m in ("lab_reporting", "etl_report", "vendor_support", "HOSP\\mleft", "HOSP\\olduser",
+                                "HOSP\\tmokoena", "HOSP\\reception", "HOSP\\LabVendors", "orphan_user")]
+    writers = ["etl_report"] + ([] if fixed else [E.vendor_login])
+    q["database_role_members"] = ([{"database_name": db, "role_name": "db_owner", "member_name": "lab_app"}]
+                                  + [{"database_name": db, "role_name": "db_datareader", "member_name": m} for m in readers]
+                                  + [{"database_name": db, "role_name": "db_datawriter", "member_name": m} for m in writers])
+    perms = [{"database_name": db, "grantee": n, "class_desc": "DATABASE", "permission_name": "CONNECT",
               "state_desc": "GRANT", "schema_name": None, "object_name": None}
              for n, *_ in users if n not in ("dbo", "guest")]
     if not fixed:
-        perms.append({"database_name": "LabDB", "grantee": "guest", "class_desc": "DATABASE", "permission_name": "CONNECT",
+        perms.append({"database_name": db, "grantee": "guest", "class_desc": "DATABASE", "permission_name": "CONNECT",
                       "state_desc": "GRANT", "schema_name": None, "object_name": None})
-    perms.append({"database_name": "LabDB", "grantee": "public", "class_desc": "OBJECT_OR_COLUMN",
+    perms.append({"database_name": db, "grantee": "public", "class_desc": "OBJECT_OR_COLUMN",
                   "permission_name": "SELECT", "state_desc": "GRANT", "schema_name": "dbo", "object_name": "Results"})
-    perms.append({"database_name": "LabDB", "grantee": "public", "class_desc": "OBJECT_OR_COLUMN",
+    perms.append({"database_name": db, "grantee": "public", "class_desc": "OBJECT_OR_COLUMN",
                   "permission_name": "SELECT", "state_desc": "GRANT", "schema_name": "sys", "object_name": "objects"})
     q["database_permissions"] = perms
-    q["tables"] = [{"database_name": "LabDB", "schema_name": "dbo", "table_name": t, "row_estimate": n}
+    q["tables"] = [{"database_name": db, "schema_name": "dbo", "table_name": t, "row_estimate": n}
                    for t, n in (("Patients", 48211), ("Results", 912334), ("TestCatalog", 412))]
-    q["columns"] = [{"database_name": "LabDB", "schema_name": "dbo", "table_name": t, "column_name": c}
+    q["columns"] = [{"database_name": db, "schema_name": "dbo", "table_name": t, "column_name": c}
                     for t, cs in (("Patients", ["PatientID", "IDNumber", "Surname", "FirstName", "DOB"]),
                                   ("Results", ["PatientID", "TestCode", "Result", "ICD10"]),
                                   ("TestCatalog", ["TestCode", "Description"])) for c in cs]
-    return {"schema": "tripline.exposure-catalog/v1", "engine": "mssql", "server": "LABSQL01", "database": "LabDB",
+    return {"schema": "tripline.exposure-catalog/v1", "engine": "mssql", "server": E.sql_server, "database": db,
             "queries": q, "errors": {}}
 
 
-def _pg_catalog(d: Path) -> None:
+def _pg_catalog(d: Path, E: Estate) -> None:
     def w(name, rows):
         if not rows:
             return
@@ -414,7 +480,7 @@ def _pg_catalog(d: Path) -> None:
                 for n, s, lg in roles])
     w("auth_members", [{"role_name": "pg_execute_server_program", "member_name": "path_etl", "admin_option": "false",
                         "inherit_option": "true"}])
-    w("databases", [{"name": "pathdb", "owner": "postgres", "datallowconn": "t"}])
+    w("databases", [{"name": E.pg_database, "owner": "postgres", "datallowconn": "t"}])
     tp = []
     for t in ("patients", "results"):
         for priv in ("SELECT", "INSERT", "UPDATE", "DELETE"):
@@ -448,15 +514,15 @@ def _pg_catalog(d: Path) -> None:
     w("foreign_servers", [{"srvname": "fin_server", "fdwname": "postgres_fdw", "owner": "postgres",
                            "target": "host=finpg01,dbname=finance"}])
     w("user_mappings", [{"srvname": "fin_server", "usename": "path_app"}])
-    w("server_info", [{"server_version": "16.4", "database_name": "pathdb"}])
+    w("server_info", [{"server_version": "16.4", "database_name": E.pg_database}])
     _write(d / "_meta.json", json.dumps({"schema": "tripline.exposure-catalog/v1", "engine": "postgres",
-                                         "server": "PATHPG01", "database": "pathdb",
+                                         "server": E.pg_server, "database": E.pg_database,
                                          "errors": {"hba_rules": "permission denied for view pg_hba_file_rules"}}))
 
 
 # ------------------------------------------------------------------------------------------ identity
-def _identity(d: Path, fixed: bool) -> None:
-    dom, sx, ms, hb = "hosp.example", "supplierx.example", "medisoft.example", "healthbi.example"
+def _identity(d: Path, fixed: bool, E: Estate) -> None:
+    dom, sx, ms, hb = E.domain, "supplierx.example", "medisoft.example", "healthbi.example"
     accts = [
         ("jdoe", dom, "true", "user", "Member", "Hospital", "SQL Admins", "2026-09-28", ""),
         ("mleft", dom, "false", "user", "Member", "Hospital", "Lab Staff", "2026-03-30", "2026-03-31"),
@@ -495,8 +561,8 @@ def _identity(d: Path, fixed: bool) -> None:
     _write(d / "mfa.csv", _csv(mfa))
     _write(d / "suppliers.csv", _csv([
         ["supplier", "accounts", "contract_ref", "contract_end", "permitted_access", "permitted_assets", "mfa_required"],
-        ["SupplierX", "tech1;tech2;vendor_support", "SX-2024-17", "2027-12-31", "read", "AST-LABDB", "true"],
-        ["MediSoft", "tech3", "MS-2023-02", "2026-06-30", "read", "AST-LABDB", "true"]]))
+        ["SupplierX", f"tech1;tech2;{E.vendor_login}", "SX-2024-17", "2027-12-31", "read", E.sql_asset, "true"],
+        ["MediSoft", "tech3", "MS-2023-02", "2026-06-30", "read", E.sql_asset, "true"]]))
 
 
 ASSETS = [
@@ -517,14 +583,72 @@ ASSETS = [
     {"asset_id": "AST-ENTRA", "kind": "identity", "names": ["entra"], "owner": "Identity team", "criticality": "high"},
 ]
 
+# Module B's synthetic laboratory estate (tripline_scope.paths.synthetic: Generator.manifest() asset ids, hosts and
+# addresses), plus the assets only Module A sees (reverse proxy, file share, repository, identity, finance SQL).
+LAB_ASSETS = [
+    {"asset_id": "AST-LABSQL01", "kind": "database",
+     "names": ["LABSQL01", "labsql01.lab.example", "10.20.0.15"] + [f"LabDB{i:02d}" for i in range(1, 6)],
+     "owner": "Lab systems team", "criticality": "high"},
+    {"asset_id": "AST-LABSQL02", "kind": "database",
+     "names": ["LABSQL02", "labsql02.lab.example", "10.20.0.16"] + [f"LabDB{i:02d}" for i in range(6, 11)],
+     "owner": "Lab systems team", "criticality": "high"},
+    {"asset_id": "AST-WEB01", "kind": "host", "names": ["WEB01", "web01", "web01.lab.example", "10.20.0.40",
+                                                         "portal.lab.example"],
+     "owner": "Web team", "criticality": "high"},
+    {"asset_id": "AST-GW01", "kind": "host", "names": ["GW01", "gw01.lab.example", "10.20.0.41"],
+     "owner": "Infrastructure", "criticality": "high"},
+    {"asset_id": "AST-DC01", "kind": "identity", "names": ["DC01", "dc01.lab.example", "10.20.0.5"],
+     "owner": "Identity team", "criticality": "high"},
+    {"asset_id": "AST-LISPG01", "kind": "database", "names": ["LISPG01", "lispg01.lab.example", "lis", "10.20.0.25"],
+     "owner": "LIS team", "criticality": "high"},
+    {"asset_id": "AST-LIS", "kind": "application", "names": ["LIS Portal", "LISAPP01", "lis.lab.example", "10.20.0.30"],
+     "owner": "Lab systems team", "criticality": "high"},
+    {"asset_id": "AST-PROXY01", "kind": "host", "names": ["proxy01", "proxy01.lab.example"], "owner": "Infrastructure",
+     "criticality": "medium"},
+    {"asset_id": "AST-FS01", "kind": "share", "names": ["share01", "fileserver01.lab.example"],
+     "owner": "Lab operations", "criticality": "medium"},
+    {"asset_id": "AST-REPO-LIS", "kind": "application", "names": ["repo01"], "owner": "LIS development",
+     "criticality": "medium"},
+    {"asset_id": "AST-FINSQL", "kind": "database", "names": ["FINSQL02"], "owner": "Finance IT", "criticality": "medium"},
+    {"asset_id": "AST-ENTRA", "kind": "identity", "names": ["entra"], "owner": "Identity team", "criticality": "high"},
+]
 
-def manifest_doc(snapshot: str = "snapshot", budget: dict | None = None) -> dict:
+ESTATES = {
+    "hospital": Estate(
+        name="hospital", netbios="HOSP", domain="hosp.example", vendor_login="vendor_support",
+        sql_id="labdb", sql_server="LABSQL01", sql_database="LabDB", sql_asset="AST-LABDB",
+        pg_id="pathdb", pg_server="PATHPG01", pg_database="pathdb", pg_asset="AST-PATHDB", pg_host="pathdb.hosp.example",
+        audit_name="HospitalAudit", scan_id="SYNTH-EXPOSURE", owner="Synthetic Hospital IT Security",
+        supplied_by="Synthetic Hospital IT", patient_data_assets=("AST-LABDB", "AST-PATHDB", "AST-LIS"),
+        assets=tuple(ASSETS)),
+    "lab": Estate(
+        name="lab", netbios="LAB", domain="lab.example", vendor_login="vendor.support",
+        sql_id="labsql01", sql_server="LABSQL01", sql_database="LabDB03", sql_asset="AST-LABSQL01",
+        pg_id="lispg01", pg_server="LISPG01", pg_database="lis", pg_asset="AST-LISPG01", pg_host="lispg01.lab.example",
+        audit_name="LabAudit", scan_id="SYNTH-LAB-EXPOSURE", owner="Synthetic Laboratory IT Security",
+        supplied_by="Synthetic Laboratory IT",
+        patient_data_assets=("AST-LABSQL01", "AST-LABSQL02", "AST-LISPG01", "AST-LIS"), assets=tuple(LAB_ASSETS),
+        guardrail_links=False),
+}
+ROOT_ASSETS = {"web01": "AST-WEB01", "proxy01": "AST-PROXY01", "share01": "AST-FS01", "repo01": "AST-REPO-LIS"}
+
+
+def estate_of(estate: str | Estate) -> Estate:
+    if isinstance(estate, Estate):
+        return estate
+    if estate not in ESTATES:
+        raise ValueError(f"estate must be one of {', '.join(ESTATES)}")
+    return ESTATES[estate]
+
+
+def manifest_doc(snapshot: str = "snapshot", budget: dict | None = None, estate: str | Estate = "hospital") -> dict:
+    E = estate_of(estate)
     return {
         "schema": "tripline.exposure-manifest/v1",
-        "scan_id": "SYNTH-EXPOSURE",
-        "owner": "Synthetic Hospital IT Security",
+        "scan_id": E.scan_id,
+        "owner": E.owner,
         "legal_basis": "POPIA s19 security safeguards: authorised readiness assessment (synthetic)",
-        "supplied_by": "Synthetic Hospital IT",
+        "supplied_by": E.supplied_by,
         "received_at": "2026-10-01T06:00:00Z",
         "snapshot_taken_at": AS_OF,
         "budget": budget or {"max_files": 5000, "max_total_bytes": "512MiB", "max_file_bytes": "2MiB",
@@ -532,7 +656,7 @@ def manifest_doc(snapshot: str = "snapshot", budget: dict | None = None) -> dict
                              "archive_max_ratio": 100, "archive_max_total_bytes": "64MiB"},
         "observation_window": {"start": "2026-04-01T00:00:00Z", "end": "2026-09-30T23:59:59Z"},
         "stale_after_days": 180,
-        "hospital_domains": ["hosp.example"],
+        "hospital_domains": [E.domain],
         "exclusions": ["**/node_modules/**"],
         "roots": [
             {"id": "web01", "path": f"{snapshot}/web01", "kind": "web_root", "asset": "AST-WEB01", "owner": "Web team"},
@@ -541,9 +665,9 @@ def manifest_doc(snapshot: str = "snapshot", budget: dict | None = None) -> dict
             {"id": "repo01", "path": f"{snapshot}/repo01", "kind": "repository", "asset": "AST-REPO-LIS"},
         ],
         "databases": [
-            {"id": "labdb", "engine": "mssql", "name": "LabDB", "server": "LABSQL01", "asset": "AST-LABDB",
+            {"id": E.sql_id, "engine": "mssql", "name": E.sql_database, "server": E.sql_server, "asset": E.sql_asset,
              "patient_data": True, "export": "catalog/labdb_mssql.json", "owner": "Lab systems team"},
-            {"id": "pathdb", "engine": "postgres", "name": "pathdb", "server": "PATHPG01", "asset": "AST-PATHDB",
+            {"id": E.pg_id, "engine": "postgres", "name": E.pg_database, "server": E.pg_server, "asset": E.pg_asset,
              "patient_data": True, "export": "catalog/pathdb_pg"},
             {"id": "risdb", "engine": "oracle", "name": "RIS", "export": "catalog/ris_oracle.json"},
         ],
@@ -553,23 +677,25 @@ def manifest_doc(snapshot: str = "snapshot", budget: dict | None = None) -> dict
                      "asset": "AST-ENTRA"},
         "assets": "assets.yaml",
         "accepted_risks": "accepted_risks.yaml",
-        "patient_data_assets": ["AST-LABDB", "AST-PATHDB", "AST-LIS"],
+        "patient_data_assets": list(E.patient_data_assets),
         "principals": [
-            {"name": "lab_app", "database": "labdb", "type": "application", "function": "LIS application",
+            {"name": "lab_app", "database": E.sql_id, "type": "application", "function": "LIS application",
              "expected_access": "write"},
-            {"name": "lab_reporting", "database": "labdb", "type": "application", "function": "Reporting service",
+            {"name": "lab_reporting", "database": E.sql_id, "type": "application", "function": "Reporting service",
              "expected_access": "read"},
-            {"name": "etl_report", "database": "labdb", "type": "service", "function": "Nightly reporting extract",
+            {"name": "etl_report", "database": E.sql_id, "type": "service", "function": "Nightly reporting extract",
              "expected_access": "read"},
-            {"name": "HOSP\\jdoe", "type": "dba", "function": "Database administrator"},
-            {"name": "path_app", "database": "pathdb", "type": "application", "function": "Pathology application",
+            {"name": E.p("HOSP\\jdoe"), "type": "dba", "function": "Database administrator"},
+            {"name": "path_app", "database": E.pg_id, "type": "application", "function": "Pathology application",
              "expected_access": "write"},
-            {"name": "path_report", "database": "pathdb", "type": "application", "expected_access": "read"},
-            {"name": "path_etl", "database": "pathdb", "type": "service", "expected_access": "read"},
+            {"name": "path_report", "database": E.pg_id, "type": "application", "expected_access": "read"},
+            {"name": "path_etl", "database": E.pg_id, "type": "service", "expected_access": "read"},
         ],
     }
 
 
+# Expected database / identity findings, written for the reference (hospital) estate; Estate.p / Estate.db rename
+# principals and database ids for another estate.
 DB_TRUTH = [
     ("A2.app-admin-rights", "labdb", "lab_app", "critical"),
     ("A2.app-admin-rights", "labdb", "HOSP\\svc_backup", "critical"),
@@ -614,10 +740,30 @@ ABSENT = [  # least-privilege and evidence-gap cases that must NOT produce these
 ]
 
 
-def build(out: Path | str, variant: str = "baseline", seed: int = 20261001) -> dict:
-    """Write the synthetic input set under ``out`` and return the ground truth (also saved as ground_truth.json)."""
+def _lab_weaknesses(E: Estate) -> dict:
+    """The weaknesses the unified laboratory demo narrates, as expected scanner findings (lab estate only)."""
+    return {
+        "xp_cmdshell_enabled": {"rule_id": "A4.mssql-xp-cmdshell", "database": E.sql_id, "asset_id": E.sql_asset},
+        "over_privileged_service_account": {"rule_id": "A2.app-admin-rights", "database": E.sql_id,
+                                            "principal": E.p("HOSP\\svc_backup"), "asset_id": E.sql_asset},
+        "audit_disabled": {"rule_id": "A4.mssql-audit-disabled", "database": E.sql_id, "asset_id": E.sql_asset},
+        "stale_export": {"rule_id": "A3.data-copy", "root": "share01", "path": "Lab/Exports/patients_2025-01.csv",
+                         "asset_id": "AST-FS01"},
+        "exposed_credential": {"rule_id": "A1.db-connection-password", "root": "web01", "path": "wwwroot/web.config",
+                               "asset_id": "AST-WEB01"},
+        "supplier_access": {"rule_id": "A5.supplier-excess-privilege", "principal": E.vendor_login,
+                            "asset_id": E.sql_asset},
+    }
+
+
+def build(out: Path | str, variant: str = "baseline", seed: int = 20261001, estate: str = "hospital") -> dict:
+    """Write the synthetic input set under ``out`` and return the ground truth (also saved as ground_truth.json).
+
+    ``estate`` selects the names (``hospital`` reference estate or Module B's ``lab`` estate); the seeded
+    weaknesses and every secret value are the same for a given seed and variant."""
     if variant not in ("baseline", "fixed"):
         raise ValueError("variant must be baseline or fixed")
+    E = estate_of(estate)
     out = Path(out)
     fixed = variant == "fixed"
     g = _Gen(seed)
@@ -626,28 +772,39 @@ def build(out: Path | str, variant: str = "baseline", seed: int = 20261001) -> d
     (out / "outside").mkdir(parents=True, exist_ok=True)
     decoy = g.password("decoy_outside_secret")
     _write(out / "outside" / "secret.config", f'<add key="DbPassword" value="{decoy}" />\n')
-    _web_root(snap / "web01", g, fixed, truth)
-    _proxy_root(snap / "proxy01", g, truth)
-    _share_root(snap / "share01", g, fixed, truth)
-    _repo_root(snap / "repo01", g, truth)
+    _web_root(snap / "web01", g, fixed, truth, E)
+    _proxy_root(snap / "proxy01", g, truth, E)
+    _share_root(snap / "share01", g, fixed, truth, E)
+    _repo_root(snap / "repo01", g, truth, E)
     cat = out / "catalog"
-    _write(cat / "labdb_mssql.json", json.dumps(_mssql_catalog(fixed), indent=1))
-    _pg_catalog(cat / "pathdb_pg")
+    _write(cat / "labdb_mssql.json", json.dumps(_mssql_catalog(fixed, E), indent=1))
+    _pg_catalog(cat / "pathdb_pg", E)
     _write(cat / "ris_oracle.json", json.dumps({"schema": "tripline.exposure-catalog/v1", "engine": "oracle",
                                                 "queries": {"dba_users": [{"username": "RIS_APP"}]}}))
-    _identity(out / "identity", fixed)
-    _write(out / "assets.yaml", yaml.safe_dump({"assets": ASSETS}, sort_keys=False))
+    _identity(out / "identity", fixed, E)
+    _write(out / "assets.yaml", yaml.safe_dump({"assets": list(E.assets)}, sort_keys=False))
     _write(out / "accepted_risks.yaml", yaml.safe_dump({"accepted_risks": []}))
-    _write(out / "manifest.yaml", yaml.safe_dump(manifest_doc(), sort_keys=False))
+    _write(out / "manifest.yaml", yaml.safe_dump(manifest_doc(estate=E), sort_keys=False))
     db_truth = []
     for rule, db, principal, sev in DB_TRUTH:
         if fixed and (rule, db, principal) in FIXED_DB:
             continue
-        db_truth.append({"rule_id": rule, "database": db, "principal": principal, "severity": sev,
+        db_truth.append({"rule_id": rule, "database": E.db(db), "principal": E.p(principal), "severity": sev,
                          "fixed_in_variant": (rule, db, principal) in FIXED_DB})
+    absent = [(r, E.db(db), E.p(principal)) for r, db, principal in ABSENT] if E.name != "hospital" else ABSENT
+    if E.name != "hospital":
+        db_asset = {E.sql_id: E.sql_asset, E.pg_id: E.pg_asset}
+        for t in truth:
+            t["asset_id"] = ROOT_ASSETS[t["root"]]
+        for t in db_truth:
+            if t["database"]:
+                t["asset_id"] = db_asset[t["database"]]
     gt = {"variant": variant, "seed": seed, "secrets": g.secrets, "sa_ids": g.ids, "file_findings": truth,
-          "db_findings": db_truth, "absent": ABSENT, "decoy_dir": str((out / "outside").resolve()),
+          "db_findings": db_truth, "absent": absent, "decoy_dir": str((out / "outside").resolve()),
           "excluded_dir": str((snap / "web01" / "wwwroot" / "node_modules").resolve())}
+    if E.name != "hospital":
+        gt.update({"estate": E.name, "assets": [a["asset_id"] for a in E.assets],
+                   "key_weaknesses": _lab_weaknesses(E) if not fixed else {}})
     _write(out / "ground_truth.json", json.dumps(gt, indent=1))
     return gt
 
@@ -687,3 +844,37 @@ def build_scale_tree(out: Path | str, n_files: int = 20000, seed: int = 7) -> Pa
     doc["budget"] = {"max_files": n_files + 100, "max_total_bytes": "4GiB", "max_file_bytes": "8MiB", "max_seconds": 3600}
     _write(out / "manifest.yaml", yaml.safe_dump(doc, sort_keys=False))
     return out / "manifest.yaml"
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="python -m tripline_scope.exposure.synthetic",
+                                description="Write a synthetic Module A estate (snapshot roots, catalogue and identity "
+                                            "exports, asset map, manifest, ground truth). Synthetic data only.")
+    p.add_argument("--out", required=True, help="output directory (must not exist or be empty)")
+    p.add_argument("--estate", choices=sorted(ESTATES), default="hospital",
+                   help="hospital (reference estate) or lab (Module B's synthetic laboratory estate)")
+    p.add_argument("--variant", choices=["baseline", "fixed"], default="baseline")
+    p.add_argument("--seed", type=int, default=20261001)
+    p.add_argument("--attest", action="store_true",
+                   help="record every written file in the installation's synthetic-origin registry "
+                        "(needs TSCOPE_HOME and the KEK passphrase)")
+    a = p.parse_args(argv)
+    out = Path(a.out)
+    if out.exists() and any(out.iterdir()):
+        p.error("output directory exists and is not empty")
+    gt = build(out, a.variant, seed=a.seed, estate=a.estate)
+    res = {"out": str(out.resolve()), "estate": a.estate, "variant": gt["variant"],
+           "manifest": str((out / "manifest.yaml").resolve()),
+           "expected_findings": len(gt["file_findings"]) + len(gt["db_findings"])}
+    if a.attest:
+        from tripline_scope.core.home import Home
+        from tripline_scope.investigator.synthetic import attest_outputs
+
+        res["attested_files"] = attest_outputs(Home(), "exposure-estate", {"estate": a.estate, "variant": a.variant,
+                                                                           "seed": a.seed}, [out])
+    print(json.dumps(res, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

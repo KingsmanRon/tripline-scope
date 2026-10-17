@@ -46,8 +46,13 @@ def load_exposure_report(path: str | None) -> dict | None:
             "findings": [f for f in doc.get("findings", []) if isinstance(f, dict)]}
 
 
+def _finding_asset(f: dict) -> str | None:
+    """Module A findings carry the asset under ``asset.asset_id`` (a top-level ``asset_id`` is accepted too)."""
+    return f.get("asset_id") or ((f.get("asset") or {}).get("asset_id") if isinstance(f.get("asset"), dict) else None)
+
+
 def _finding_ref(f: dict) -> dict:
-    return {"finding_id": f.get("finding_id"), "control_id": f.get("control_id"), "asset_id": f.get("asset_id"),
+    return {"finding_id": f.get("finding_id"), "control_id": f.get("control_id"), "asset_id": _finding_asset(f),
             "severity": f.get("severity"), "state": f.get("state"), "title": safe_text(f.get("title"), 120)}
 
 
@@ -67,7 +72,7 @@ def build(analysis: dict, disp: Display, cfg: dict, exposure: dict | None) -> di
             if controls and f.get("control_id") not in controls:
                 continue
             principal = ((f.get("location") or {}).get("principal") if isinstance(f.get("location"), dict) else None)
-            if asset and f.get("asset_id") == asset:
+            if asset and _finding_asset(f) == asset:
                 out.append(_finding_ref(f))
             elif account and principal and acct_key(principal, cfg["directory_domains"]) == acct_key(account, cfg["directory_domains"]):
                 out.append(_finding_ref(f))

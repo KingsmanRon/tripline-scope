@@ -12,6 +12,13 @@ one signed report chain per report kind:
 Every engine can run on its own. None of them needs another to produce a defensible result; each records what it
 could not assess.
 
+Two consumers sit on top of the three engines and add no evidence of their own:
+
+| Consumer | Reads | Writes |
+|---|---|---|
+| AI Investigator (`tscope investigator …`, `AI_INVESTIGATOR.md`) | released, verified `exposure`, `paths`, `scope` reports | encrypted runs under `work/investigator/`; an `investigation` report through the normal release gate |
+| Investigation workbench (`tscope dashboard serve`, `DASHBOARD.md`) | released reports (incl. `investigation`), Module B's released timeline attachment, the latest validated investigator run | sessions and audit entries only |
+
 ## 1. Contracts
 
 ### 1.1 Exposure → containment (A → B)
@@ -82,12 +89,24 @@ Only people inside the approver's notification scope reach `notify/`. The pack s
 report version is released, and only the approver can export it (fresh sign-in). The export records which
 released report version it belongs to.
 
+### 1.5 Module reports → Investigator → investigation report
+
+The Investigator builds one evidence bundle from the latest released version of each module report (each verified
+first). Items keep the module ids (`AF-`, `PATH-`, `CLM-`, `ANOM-`, `GAP-`, `COR-`, `REC-`, `IM-`), and every quantity
+is a `FACT-` pointer to a report field, so every hypothesis, step and remediation in the investigation report resolves
+to a released, signed artefact. A Module A finding cited next to Module B evidence is a weakness on the same asset or
+account, not proof that the weakness caused the incident. The investigation report records the module versions and
+hashes it used; a newer module release makes an unreported run stale. Consequence classes are carried unchanged: the
+Investigator cannot raise `egress_suspected` to `exfiltration_evidenced` or treat missing logs as absence.
+
 ## 2. Legal hold and retention
 
 * `tscope case hold on --reason …` (approver) blocks closure; `hold off` lifts it. Both are audited.
 * `case.yaml retention.retain_reports_until` records how long signed reports, custody manifests, findings and the
   audit log are kept. Closure keeps exactly these; working data, restores, notification pack and the case key are
   destroyed and listed in the signed destruction certificate.
+* Investigator working data lives under `work/investigator/` and is destroyed at closure with the rest of `work/`;
+  released investigation reports are retained like every other signed report.
 * Readiness cases are long-lived: they retain configuration, finding metadata, data maps, drill reports and signed
   reports. Working files (scan intermediates, drill data) are purged by closing the drill sub-case or by
   `tscope case close`; findings stay in the signed reports.

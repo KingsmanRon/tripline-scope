@@ -220,3 +220,15 @@ def test_reingest_reuses_registrations_and_tamper_aborts(demo_dir, tmp_path, mon
     subprocess.run(["python3", "-c", script, str(f)], check=True)
     rc, out, err = testing.run_cli(["paths", "ingest", "--case", str(ns.case_dir), "--manifest", str(syn / "logs.yaml")])
     assert rc == 4 and "hash mismatch" in err
+
+
+def test_module_a_findings_are_matched_by_nested_asset_id():
+    """Released exposure findings carry ``asset.asset_id``; containment must cross-reference them by it."""
+    from tripline_scope.paths import containment
+
+    f = {"finding_id": "AF-x", "control_id": "A4", "asset": {"asset_id": "AST-LABSQL01"}, "severity": "critical",
+         "state": "new", "title": "xp_cmdshell enabled"}
+    assert containment._finding_asset(f) == "AST-LABSQL01"
+    assert containment._finding_ref(f)["asset_id"] == "AST-LABSQL01"
+    assert containment._finding_asset({"asset_id": "AST-1"}) == "AST-1"
+    assert containment._finding_asset({"asset": None}) is None

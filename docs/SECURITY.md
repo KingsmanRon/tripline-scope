@@ -2,8 +2,9 @@
 
 Tripline Scope runs entirely on hospital infrastructure. It makes no outbound connections: no telemetry,
 licence checks or update checks. The only network connections it opens are to database instances you
-configure (a restore server, or an optional read-only live login) on your own network, and the review page,
-which listens on `127.0.0.1` only.
+configure (a restore server, or an optional read-only live login) on your own network, the review page and
+the investigation workbench, which listen on `127.0.0.1` only, and — only if the administrator configures one — a
+local model server on a literal loopback address for the AI Investigator. No hosted AI provider is enabled.
 
 ## 1. Data flows
 
@@ -58,6 +59,9 @@ which listens on `127.0.0.1` only.
 | `<case>/sources/` | read-only references (symlinks) or encrypted copies, custody manifests | originals untouched; copies are envelopes |
 | `<case>/work/`, `review/` | extracted columns, discovery results, matches, review decisions, normalised events, scan results | AES-256-GCM envelopes under the case key |
 | `<case>/notify/` | the notification pack (minimum identifiers + contact for authorised notices) | encrypted; exported only by the approver after release |
+| `<case>/work/investigator/` | evidence bundles, prompts, raw provider output, validated results, reviews, frozen report inputs | AES-256-GCM envelopes; destroyed at closure like all of `work/` |
+| `<case>/reports/investigation/` | released investigation reports (validated, reviewed conclusions + hashes; no prompts or raw output) | signed, immutable |
+| `<home>/synthetic_registry.json` | SHA-256 of files written by the synthetic generators with `--attest` | HMAC under a KEK-derived key; used only to permit the synthetic-only manual model bridge |
 | `<case>/reports/` | released versions: canonical JSON, PDF, attachments, `release.json`, `signatures.json` | counts and categories only (saving a report refuses identifier-like values); signed; read-only |
 | `<case>/audit.log` | who did what, when, with input/output hashes | hash-chained JSON Lines; no values; SIEM-exportable |
 | installation home | config, users, sessions, profiles, certificates, keystore (unless relocated) | mode 0700; no patient data |
@@ -95,6 +99,34 @@ at release and close. Release and close require a fresh approver sign-in and the
 leaves the case unsigned. Reviewers see only the fields needed to decide each pair and every view is logged.
 The audit log is hash-chained; `tscope audit verify` and the stand-alone `tscope-verify audit` detect any
 edited, deleted or reordered entry. Audit parameters are length-capped and scrubbed of identifier-like values.
+
+## 4a. AI Investigator and investigation workbench
+
+* **Read-only, advisory.** The Investigator reads only released, signature-verified Module A/B/C reports, never
+  extracts, restores, logs, sources or the notification pack. It cannot change evidence, classifications, counts,
+  scope or notification decisions, and it has no tools: no SQL, shell, file, network, scanning or containment
+  capability exists in the provider interface. Remediation is recorded as requiring hospital authorisation and never
+  executed. Details: `AI_INVESTIGATOR.md`.
+* **Deterministic validation.** Model output is untrusted; a deterministic validator (not the model) rejects unknown or
+  cross-case evidence ids, promotion of consequence classes, unsupported exfiltration, missing logs read as absence,
+  numbers not equal to report facts, identifiers, credentials, URLs, commands and claims of executed actions.
+  Rejected text stays inside the encrypted run directory and never reaches logs, errors, the workbench or reports.
+* **Providers.** Explicit selection, no fallback. The deterministic fixture is labelled as not AI inference. The local
+  provider connects only to a literal loopback address (no DNS, proxies or redirects; size and time limits). Hosted
+  providers (OpenAI Daybreak, Anthropic) are adapter boundaries that report `unavailable`. A manual, human-mediated
+  bridge exists for **synthetic cases only**, gated by the attested synthetic registry.
+* **Prompt injection.** Log and configuration text is passed as labelled untrusted data; tests plant instructions in a
+  SQL audit record and show that an obedient provider's output is rejected, no process or connection is started and
+  nothing injected is stored or reported.
+* **Workbench.** `tscope dashboard serve` listens on 127.0.0.1, requires sign-in through the same identity provider and
+  a role on the case, uses HttpOnly + SameSite=Strict session cookies with idle and absolute expiry, CSRF tokens, Host
+  and Origin checks, a strict Content-Security-Policy with no external assets, `frame-ancestors 'none'`, and
+  `Cache-Control: no-store`. It is read-only (sessions and audit entries are its only writes), serves released report
+  files from a fixed allowlist, never serves the notification pack or person-level data, and audits sensitive views.
+  Details: `DASHBOARD.md`.
+* **Known gap.** The documented encrypted-spill option (`duckdb.spill_dir` + `spill_dir_encrypted`) is implemented in
+  `core.duck.connect_for_home`, but no module's load path uses it yet (found while preparing the 80M runbook); every
+  module therefore runs fully in memory with spill disabled.
 
 ## 5. Closure and destruction
 

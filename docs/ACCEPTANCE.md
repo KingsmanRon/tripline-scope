@@ -1,4 +1,4 @@
-# Acceptance record — Tripline Scope v0
+# Acceptance record — Tripline Scope v0 and release 1
 
 Every result below was produced in this repository on synthetic data, on the machine described in §1. "Pass" means
 the check was run and passed; "Fail" means it was run and missed the target; "Not run" means it was not done here,
@@ -40,7 +40,7 @@ with the reason. No timing in this document is a guarantee.
 | Preliminary estimate vs final count | within 5 % | **2.5 %** at 10M (2.7 % at 100k, 2.6 % at 1M); the true count is inside the stated range in every run (lower end calibrated — §4.1) | Pass |
 | Estimate time, 80M rows | < 1 h | **4 min 26 s** for the estimate path (sliced load + estimate) on 4 vCPU / 15.7 GB, peak RSS 4.9 GB, no spill; 1.85 % from the true count, which lies inside the stated range (`bench/results/estimate_80000000.json`). Three earlier attempts with the whole-estate load ran out of memory — §4.2 | Pass |
 | Full run, 10M rows | < 2 h on 16 cores/64 GB | **≈ 2 min** for extract → load → estimate → match → people on 4 vCPU/15.7 GB, peak RSS 6.2 GB (`bench/results/10000000.json`); SQL Server restore + discovery at 10M **not run** — at the measured 14–32k rows/s it projects to roughly 20–40 min for the ~30M rows of a 10M-admission estate | Pass for matching; ingest projected, not measured |
-| Full run, 80M rows | < 24 h | **Not run** (needs > 15.7 GB RAM for matching) | Not run |
+| Full run, 80M rows | < 24 h | DEFERRED — resource-dependent full 80M person-level matching validation; preliminary estimation already measured separately. Runbook: `BENCHMARK_80M_RUNBOOK.md` | DEFERRED |
 | Source safety | checksums identical; no write reaches a source | identical before/after every demo command and every module test; process write guard + inotify watcher tests (`tests/core`, `tests/ingest`, `tests/acceptance`) | Pass |
 | Leak safety | no synthetic identifier in logs, console, reports, PDFs (notify pack exempt) | demo leak scan: 0 hits in 59 files for 85 612 identifiers; per-module leak tests (ingest, A, B, C, acceptance) | Pass |
 | Offline | full demo with networking disabled; bundle installs on a clean VM with no network | demo passes air-gapped; bundle installs in a clean network-less **container**; **clean VM / Hyper-V not tested** | Pass (container); VM not run |
@@ -55,6 +55,69 @@ with the reason. No timing in this document is a guarantee.
 | SQL Server TLS | encrypted session; certificate chain and host name verified | pyOpenSSL (Apache-2.0) now bundled. Against SQL Server 2022 with a test-CA certificate: right CA + matching host → encrypted session; mismatched host → refused (accepted only with `trust_server_certificate`, which skips the host check alone); wrong CA → refused in both modes. Unit tests `tests/ingest/test_mssql_tls.py`; the server-side matrix was run by hand (needs a certificate installed in the container) | Pass |
 | Review page as a live process | binds 127.0.0.1 only; sign-in; DNS-rebinding refused | `tscope scope review` started as a subprocess: listening only on 127.0.0.1, reviewer sign-in and item fetch over real HTTP, foreign Host header → 400 (`test_review_page_live_server`) | Pass |
 | Documentation | README, METHOD, SECURITY, EXPOSURE, ACCESS_PATHS, INTEGRATION, ACCEPTANCE | all present (plus INGEST, SUPPLY_CHAIN, PLAN) | Pass |
+
+## 3a. Release 1 — AI Investigator, Investigation Workbench, unified synthetic demo
+
+Measured on the same 4 vCPU / 15.7 GB shared machine, on synthetic data, branch
+`feature/ai-investigator-workbench-demo`.
+
+| Check | Command / evidence | Result | Status |
+|---|---|---|---|
+| Whole test suite incl. Docker/SQL Server, PostgreSQL and both full demo scenarios | `pytest -q tests` | **531 passed, 3 skipped** (opt-in `-m slow` ingest benchmarks), 17 min 18 s | PASS |
+| Same, networking disabled | `make test-offline` | **519 passed**, 15 deselected (Docker/slow) | PASS |
+| Investigator tests | `tests/investigator` | 63 passed (validator 29, workflow 10, injection 3, local provider 12, bridge + bundle 8, workbench integration 1) | PASS |
+| Workbench tests | `tests/dashboard` | 55 passed | PASS |
+| Demo tests | `tests/demo` | 20 passed (2 of them full Docker demos at 20k rows) | PASS |
+| Lint, hashed locks, licence gate, SBOM | `ruff`, `make check-locks licences sbom` | pass; locks runtime 42 / dev 80; 42 runtime distributions, 0 unknown/denied (no new dependency) | PASS |
+| Offline bundle and install | `make bundle bundle-verify install-test`; `tests/packaging` | 496 MB, 74 signed files verified (ephemeral release key); venv and container installs PASS without network; 67 packaging tests passed | PASS |
+| Valid evidence → schema-valid result | `test_fixture_output_is_schema_valid_and_fully_accepted` | 32/32 items accepted | PASS |
+| Unknown / cross-case ids, wrong or stale hashes | `test_unknown_and_cross_case_evidence_ids_rejected`, `test_case_and_bundle_mismatch_rejected`, `test_stale_run_rejected_after_new_module_release`, `test_tampered_released_report_is_refused` | rejected / refused | PASS |
+| SELECT ≠ theft; local export ≠ exfiltration; outbound flow stays suspected | validator tests | `promotion` / `exfiltration_unsupported` | PASS |
+| Exfiltration only with eligible corroboration | `test_exfiltration_requires_eligible_corroboration`; corroborated demo | accepted only with `COR-001`; only `LabDB03.dbo.patients` is `exfiltration_evidenced` | PASS |
+| Missing logs stay explicit; AI cannot fabricate counts | `test_missing_logs_remain_explicit`, `test_ai_cannot_fabricate_population_counts` | rejected | PASS |
+| Prompt injection has no privileged effect | `test_injection.py` (instructions planted in a SQL audit record) | no process, no connection, nothing stored; Module B classes unchanged | PASS |
+| No external network in hospital mode | unavailable-provider and local-provider tests (connections recorded), offline suite, air-gapped demo | only 127.0.0.1 contacted; hosted adapters never connect | PASS |
+| AI absence/failure cannot break A/B/C | `test_unavailable_providers_fail_closed_without_network`, `test_failed_provider_output_is_recorded_safely_and_retry_works` | module report trees identical; `tscope verify` passes | PASS |
+| Approval gates; signed report tamper detection; deterministic re-render | `test_roles_and_review_gates`, `test_release_verify_tamper_and_reproducibility` | reviewer/approver gates enforced; `tscope-verify` fails after tampering; byte-identical re-render | PASS |
+| Manual bridge synthetic-only | `test_bridge_*`, `test_registry_is_tamper_evident` | refused for unattested or mixed cases; registry tampering detected | PASS |
+| Workbench security (localhost, auth, roles, host/CSRF/origin, session expiry, paths, no identifiers, paging, unavailable ≠ 0, read-only, counts agree, offline) | `tests/dashboard` | all covered and passing | PASS |
+| Workbench in a real browser | headless Chromium at 1366×768 against a case with all reports: sign-in, all seven sections | no console errors, no CSP violations, no requests to other origins; advisory and fixture labels shown (manual script, not in the suite) | PASS |
+| Unified demo, suspected | `demo/lab-breach/run.sh --scenario suspected --bridge-export` | DEMO PASSED, 198.9 s; 63 Module A findings from the scanner; no table `exfiltration_evidenced`; Module C confirmed exfiltration `not determinable`; 3 cross-references; 36/36 sources attested; 0 leaks; sources unchanged; all chains incl. `investigation` verified; workbench checks pass (`bench/results/demo_unified_100k_suspected.json`) | PASS |
+| Unified demo, corroborated | `--scenario corroborated` | DEMO PASSED, 205.6 s; Module C confirmed exfiltration 298 people (`bench/results/demo_unified_100k_corroborated.json`) | PASS |
+| Unified demo, air-gapped | `scripts/run_airgapped.sh … run_demo.py` | DEMO PASSED, 195.5 s (`bench/results/demo_unified_100k_airgapped_suspected.json`) | PASS |
+| Matching baseline not regressed | `bench/scope_bench.py --rows 1000000` | auto-link precision 99.966 %, person-count error 0.08 %, review band 0.18 %, estimate 2.6 % from final (`bench/results/1000000_release1.json`) | PASS |
+| 10M matching re-run | — | not re-run for this release (matching code unchanged; recorded 10M result stands) | NOT RUN |
+| Real local model through `--provider local` | — | no model weights available in the build environment; transport tested against a stand-in server only | NOT RUN |
+| Hosted providers (OpenAI Daybreak, Anthropic) | — | not authorised; adapters report `unavailable` | NOT RUN (by design) |
+| Full 80M person-level matching | — | DEFERRED — resource-dependent full 80M person-level matching validation; preliminary estimation already measured separately (`BENCHMARK_80M_RUNBOOK.md`) | DEFERRED |
+| Clean VM / Hyper-V install of this release | — | container installs only | NOT RUN |
+
+Found and fixed during this release: Module B containment never cross-referenced Module A findings by asset
+(it read a top-level `asset_id`; released findings carry `asset.asset_id`) — found by the unified demo test;
+the validator trusted a bundle's stated hash instead of recomputing it; dashboard evidence links did not resolve
+`IM-`, `XA-` and `SCOPE-` ids. Found and documented, not changed: the encrypted-spill option is not wired into
+any module's load path (SECURITY.md §4a, runbook §3).
+
+## 3b. Pre-merge review of PR 3 — exfiltration scope, workbench integrity, review gating
+
+Three defects found in review of release 1 and fixed on the same branch; each has tests that fail on the release-1
+code and pass now.
+
+| Check | Command / evidence | Result | Status |
+|---|---|---|---|
+| Exfiltration claims limited to the exact table, data category and count the corroboration covers | `test_corroboration_of_table_a_does_not_support_exfiltration_of_table_b` (COR for `LabDB07.dbo.patients` + access path also reading `LabDB06.dbo.patients`), `test_unscoped_or_broad_exfiltration_claims_rejected`, `test_exfiltration_claim_limited_to_covered_data_categories_and_counts`, `test_fixture_exfiltration_hypothesis_names_only_the_corroborated_table` | claims about table B, uncovered categories, possible-exposure counts, "all"/"entire" or unscoped claims rejected (`exfiltration_scope`) in hypotheses, alternatives, steps, remediation and missing evidence; the scoped claim is accepted; the release-1 fixture wording is now rejected | PASS |
+| Workbench uses released data only after its chain verifies; failure refused with a warning | `tests/dashboard/test_report_integrity.py`: tampered report, tampered timeline attachment, forged release record, tampering after verification (hash-bound reads), investigator run built on a tampered report | affected kind returns `integrity_failure` with the warning, no findings, files refused (409), other kinds served, alert on every response | PASS |
+| Verification cache invalidation | `test_cache_follows_file_changes_even_when_mtime_is_restored` | same-size, same-mtime edit re-verified (ctime) and refused; restored file verified and shown again without restart; unchanged files not re-verified | PASS |
+| Signed report holds only explicitly accepted AI steps, remediation and missing-evidence items | `test_unreviewed_recommendations_are_segregated_not_approved`, `test_fully_reviewed_run_has_no_unreviewed_proposals` | accepted items in the analysis with reviewer and decision; unreviewed items segregated as NOT REVIEWED / not approved (JSON and PDF); rejected items absent; report verifies and re-renders byte-identically | PASS |
+| Whole suite | `pytest -q tests` | 534 passed, 11 skipped (Docker daemon down at start: 9; opt-in slow: 2), 14 min 29 s; then with Docker up `pytest -m docker tests`: both full demos (suspected, corroborated) and every SQL Server test passed (`test_real_ingest_matches_direct_extract` failed once with "Server closed connection" while the offline suite ran in parallel and passed alone) | PASS |
+| Same, networking disabled | `make test-offline` | **530 passed**, 15 deselected (Docker/slow), 11 min 41 s | PASS |
+| Targeted suites | `tests/investigator`, `tests/dashboard` | 69 and 60 passed | PASS |
+| Workbench in a real browser | headless Chromium, all seven sections, clean and with the paths report tampered while the server runs | no console errors or external requests; warning banner on every page and in the refused sections; restored file shown again | PASS |
+| 80M full matching | — | not re-run (out of scope for this review) | DEFERRED |
+
+Behaviour notes: an investigation report released before this change re-renders differently (the AI section's
+structure changed), so `investigator verify` reports `reproducible: false` for such a report; no such report exists
+outside test and demo cases. The validator is now `investigator-validator/1.1.0`.
 
 ## 4. Details for the misses and the scale runs
 

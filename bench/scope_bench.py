@@ -69,7 +69,12 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=20260914)
     ap.add_argument("--publish", action="store_true")
     ap.add_argument("--keep", action="store_true")
+    ap.add_argument("--memory-limit", help="DuckDB memory cap, e.g. 56GB (spill stays disabled: an exceeded cap "
+                                           "aborts the run with an out-of-memory error instead of writing plaintext)")
+    ap.add_argument("--approved-by", help="required above 20M rows: who approved the cost/resources (recorded)")
     args = ap.parse_args(argv)
+    if args.rows > 20_000_000 and not args.approved_by:
+        ap.error("runs above 20M rows need --approved-by (see docs/BENCHMARK_80M_RUNBOOK.md)")
     work = Path(args.workdir) if args.workdir else Path(tempfile.mkdtemp(prefix="scope-bench-"))
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
@@ -98,7 +103,7 @@ def main(argv=None) -> int:
     cfg = config.load(case)
     ref = synth_reference_date(syn)
     t0 = time.time()
-    d = data.load(case, store, cfg, threads=args.threads, reference_date=ref)
+    d = data.load(case, store, cfg, threads=args.threads, memory_limit=args.memory_limit, reference_date=ref)
     mark("load", t0)
     t0 = time.time()
     est = estimate.estimate(d)
@@ -126,6 +131,8 @@ def main(argv=None) -> int:
         "timings_s": T,
         "peak_rss_mb": rss,
         "hardware": hardware(),
+        "memory_limit": args.memory_limit,
+        "approved_by": args.approved_by,
     }
     out = HERE / "results" / f"{args.rows}.json"
     out.parent.mkdir(exist_ok=True)

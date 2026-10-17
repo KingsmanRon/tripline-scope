@@ -13,10 +13,16 @@ server-side), runs ``BACKUP DATABASE ... TO DISK`` inside the container, copies 
 
 SQL Server Developer Edition is licensed for development and test only: use this with synthetic data only.
 
+``--attest`` (generator ``lab-bak``): before building, every input Parquet file must already be in the
+installation's synthetic-origin registry as output of ``tscope synth --attest``; the inputs are re-hashed after
+the build, and only then is each written ``.bak`` recorded in the registry. SQL Server backups are not
+byte-reproducible, so a ``.bak`` is attested by this builder from attested synthetic inputs, never by
+re-deriving its bytes. Needs ``TSCOPE_HOME`` and the KEK passphrase.
+
 Usage::
 
     python demo/lab-breach/build_baks.py --synth DIR --out DIR --host 127.0.0.1 --port 14330 \\
-        --container mssql-test --password-env TSCOPE_DEMO_MSSQL_PASSWORD [--login sa] [--db-prefix ""]
+        --container mssql-test --password-env TSCOPE_DEMO_MSSQL_PASSWORD [--login sa] [--db-prefix ""] [--attest]
 """
 
 from __future__ import annotations
@@ -185,6 +191,28 @@ def build(args) -> list[Path]:
     return made
 
 
+def input_parquets(synth: Path) -> list[Path]:
+    return sorted(p for d in sorted((Path(synth) / "sources").glob("db[0-9][0-9]")) if d.is_dir()
+                  for p in d.glob("*.parquet"))
+
+
+def attested_input_hashes(synth: Path, home) -> dict[str, str]:
+    """{file: sha256} of every input Parquet file; exits unless each one is registered output of ``synth``."""
+    from tripline_scope.core.canonical import sha256_file
+    from tripline_scope.investigator.synthetic import registered
+
+    reg = registered(home)
+    files = input_parquets(synth)
+    if not files:
+        raise SystemExit("no input Parquet files to attest from")
+    hashes = {str(f): sha256_file(f) for f in files}
+    bad = [f for f, h in hashes.items() if reg.get(h, {}).get("generator") != "synth"]
+    if bad:
+        raise SystemExit(f"--attest refused: {len(bad)} of {len(files)} input file(s) are not attested output of "
+                         "'tscope synth --attest' on this installation")
+    return hashes
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--synth", required=True, help="synthetic dataset directory (contains sources/dbNN/)")
@@ -196,9 +224,27 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--container", required=True, help="Docker container running SQL Server")
     p.add_argument("--server-backup-dir", default="/var/opt/mssql/backup/tscope-build")
     p.add_argument("--db-prefix", default="", help="prefix for build database names (e.g. ingest_ in tests)")
+    p.add_argument("--attest", action="store_true",
+                   help="require attested synthetic inputs and record each written .bak in the synthetic-origin "
+                        "registry (needs TSCOPE_HOME and the KEK passphrase)")
     args = p.parse_args(argv)
+    home = inputs = None
+    if args.attest:
+        from tripline_scope.core.home import Home
+
+        home = Home()
+        inputs = attested_input_hashes(Path(args.synth), home)
     made = build(args)
     print(f"{len(made)} backup(s) written to {args.out}")
+    if args.attest:
+        from tripline_scope.core.canonical import canonical_bytes, sha256_hex
+        from tripline_scope.investigator.synthetic import attest_outputs
+
+        if attested_input_hashes(Path(args.synth), home) != inputs:
+            raise SystemExit("--attest refused: input files changed during the build")
+        n = attest_outputs(home, "lab-bak", {"inputs_sha256": sha256_hex(canonical_bytes(sorted(inputs.values()))),
+                                             "db_prefix": args.db_prefix}, made)
+        print(f"attested {n} backup(s) built from {len(inputs)} attested synthetic input file(s)")
     return 0
 
 
