@@ -174,6 +174,26 @@ tscope verify --case /cases/C
 tscope case close --case /cases/C --approver ines --external-backup "..."
 ```
 
+**Investigation analysis and workbench** (optional; after the module reports are released):
+
+```
+tscope exposure scan/report ... && tscope release --case /cases/C --kind exposure --approver ines   # Module A
+tscope release --case /cases/C --kind paths --approver ines                                        # Module B
+tscope investigator providers                                       # which providers are available and why not
+tscope investigator analyse --case /cases/C --provider local        # operator; or --provider fixture (not AI)
+tscope investigator show --case /cases/C                            # validated hypotheses, gaps, next steps
+tscope investigator review --case /cases/C --run RUN-… --item H1 --decision accept --note "..."   # reviewer
+tscope investigator report --case /cases/C                          # operator: draft investigation report
+tscope release --case /cases/C --kind investigation --approver ines # Information Officer
+tscope investigator verify --case /cases/C
+tscope dashboard serve --case /cases/C                              # read-only workbench on http://127.0.0.1:8766/
+```
+
+The Investigator is advisory: it reads only released, verified reports, proposes hypotheses that a deterministic
+validator checks against the evidence, and changes nothing. Only a local model on a loopback address (configured by
+the administrator) or the labelled deterministic fixture can be used; hosted providers are not enabled. See
+`docs/AI_INVESTIGATOR.md` and `docs/DASHBOARD.md`.
+
 **Readiness case:**
 
 ```
@@ -189,8 +209,10 @@ tscope release --case /cases/R --kind datamap|exposure|drill --approver ...
 tscope readiness report --case /cases/R && tscope release --case /cases/R --kind readiness --approver ...
 ```
 
-**Demo:** `demo/lab-breach/run.sh` (synthetic data, SQL Server Developer for the demo only) runs the whole
-incident flow above in about two minutes at 100k rows and ends with a leak scan and a source-checksum check.
+**Demo:** `demo/lab-breach/run.sh` (synthetic data, SQL Server Developer for the demo only) runs the unified
+synthetic laboratory breach — Module A exposure scan, Module B access paths, Module C scoping, the AI Investigator
+(deterministic fixture, labelled as such) and the workbench — and ends with signature verification, a leak scan and a
+source-checksum check. See `docs/DEMO.md`.
 `scripts/run_airgapped.sh` runs any command, including the demo, in a network namespace that can reach only
 the local Docker bridge.
 
