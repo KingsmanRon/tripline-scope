@@ -4,6 +4,11 @@ The body is a pure function of a *frozen* input — the validated result, its re
 bundle — so a released report can be re-rendered byte-for-byte from the frozen input (``verify``). Separate model
 runs are not expected to produce identical output; reproducibility is of the report from a frozen, reviewed result.
 The report never contains prompts, raw model output or rejected content, and never alters Module A/B/C reports.
+
+Human acceptance: the AI analysis's hypotheses, investigation steps, remediation actions and missing-evidence
+suggestions appear as part of the report's analysis only when a named reviewer explicitly accepted them. Proposals
+that passed validation but that nobody reviewed are kept apart in ``ai_analysis.unreviewed_proposals``, labelled as
+not reviewed and not approved; proposals a reviewer rejected are left out.
 """
 
 from __future__ import annotations
@@ -22,8 +27,15 @@ FROZEN_SCHEMA = "tripline.investigation-frozen/v1"
 STATEMENT = ("Investigation analysis built on the released, signed Module A, B and C reports of this case. The "
              "deterministic findings are computed by Tripline from those reports. The AI analysis section is advisory: "
              "hypotheses and recommendations proposed by the named provider, checked by Tripline's deterministic "
-             "validator and reviewed by a named reviewer. It does not change any evidence, classification, count, "
+             "validator and explicitly accepted by a named reviewer; validated proposals that nobody reviewed are listed "
+             "separately as unreviewed and form no part of this analysis. It does not change any evidence, classification, count, "
              "scope or notification decision, and no recommendation has been or will be executed by Tripline.")
+UNREVIEWED_NOTICE = ("NOT REVIEWED: these AI-proposed steps, actions and missing-evidence suggestions passed validation "
+                     "but no reviewer has accepted them. They are not approved, not part of this report's analysis and "
+                     "must not be acted on without review and hospital authorisation.")
+PROPOSAL_FIELDS = {"investigation_steps": ("item_id", "step", "priority", "evidence_ids"),
+                   "remediation": ("item_id", "action", "priority", "evidence_ids", "asset_ids"),
+                   "missing_evidence": ("item_id", "description", "source_family", "related_evidence")}
 LIMITATIONS = [
     "Hypotheses are explanations consistent with the cited evidence, not established findings.",
     "Confidence labels are ordinal judgements with the documented meaning below, not probabilities.",
@@ -113,10 +125,26 @@ def content(frozen: dict) -> dict:
                                        "confidence_rationale", "alternative_explanations", "tests", "cannot_conclude",
                                        "quantities")} | {"advisory": True, "review": _review_of(dec, h["item_id"])})
 
-    def items(key, fields):
-        return [{k: it[k] for k in fields} | {"advisory": True, "review": _review_of(dec, it["item_id"])}
-                for it in res[key] if it["validation"]["verdict"] == "accepted"
-                and (dec.get(it["item_id"]) or {}).get("decision") != "reject"]
+    def decision(it):
+        return (dec.get(it["item_id"]) or {}).get("decision")
+
+    def items(key):
+        """Validated proposals a reviewer explicitly accepted (the only ones in the report's analysis)."""
+        out = [{k: it[k] for k in PROPOSAL_FIELDS[key]} | {"advisory": True, "review": _review_of(dec, it["item_id"])}
+               for it in res[key] if it["validation"]["verdict"] == "accepted" and decision(it) == "accept"]
+        if key == "remediation":
+            out = [r | {"requires_hospital_authorisation": True, "executed": False} for r in out]
+        return out
+
+    unreviewed = []
+    for key in PROPOSAL_FIELDS:
+        for it in res[key]:
+            if it["validation"]["verdict"] == "accepted" and decision(it) is None:
+                row = {k: it[k] for k in PROPOSAL_FIELDS[key]} | {"proposal_type": key, "advisory": True,
+                                                                    "review": {"status": "not reviewed"}}
+                if key == "remediation":
+                    row |= {"requires_hospital_authorisation": True, "executed": False}
+                unreviewed.append(row)
 
     prov = dict(res["provenance"] or {})
     det_missing = [{"id": i["id"], "statement": i["statement"]} for i in bundle["evidence"].values()
@@ -141,17 +169,17 @@ def content(frozen: dict) -> dict:
             "is_model_inference": bool(prov.get("is_model_inference")),
             "summary": res["summary"],
             "hypotheses": hyps,
-            "investigation_steps": items("investigation_steps", ("item_id", "step", "priority", "evidence_ids")),
-            "remediation": [r | {"requires_hospital_authorisation": True, "executed": False}
-                            for r in items("remediation", ("item_id", "action", "priority", "evidence_ids", "asset_ids"))],
+            "investigation_steps": items("investigation_steps"),
+            "remediation": items("remediation"),
             "unproven_assertions": [{"item_id": u["item_id"], "text": u["text"]} for u in res["unproven_assertions"]
                                     if u["validation"]["verdict"] == "accepted"],
+            "unreviewed_proposals": {"notice": UNREVIEWED_NOTICE, "approved": False, "items": unreviewed},
         },
         "human_reviewed_conclusions": [{"item_id": k, **v} for k, v in sorted(dec.items())],
         "missing_evidence": {
             "deterministic": det_missing,
             "source_families_not_supplied": bundle["missing_source_families"],
-            "ai_proposed": items("missing_evidence", ("item_id", "description", "source_family", "related_evidence")),
+            "ai_proposed": items("missing_evidence"),
         },
         "validation": {"verdict": res["validation"]["verdict"], "counts": res["validation"]["counts"],
                        "rejections": res["validation"]["rejections"], "validator_version": res["validator_version"]},
@@ -204,6 +232,12 @@ def render_pdf(body: dict) -> bytes:
         sections.append(pdf.Section("Proposed remediation (advisory; requires hospital authorisation; not executed)", [],
                                     table=[["Item", "Priority", "Action", "Evidence"]] + [
                                         [r["item_id"], r["priority"], r["action"], ", ".join(r["evidence_ids"])] for r in ai["remediation"]]))
+    un = ai["unreviewed_proposals"]["items"]
+    if un:
+        sections.append(pdf.Section("Unreviewed AI proposals (NOT reviewed, NOT approved, not part of this analysis)",
+                                    [ai["unreviewed_proposals"]["notice"]], table=[["Item", "Type", "Proposal"]] + [
+                                        [u["item_id"], u["proposal_type"].replace("_", " "),
+                                         u.get("step") or u.get("action") or u.get("description")] for u in un]))
     me = body["missing_evidence"]
     sections.append(pdf.Section("Missing evidence", ["Not supplied: " + ("; ".join(me["source_families_not_supplied"]) or "none recorded")]
                                 + [f"{g['id']}: {g['statement']}" for g in me["deterministic"][:20]]

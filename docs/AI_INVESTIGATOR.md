@@ -60,9 +60,16 @@ paths, `CLM-` table claims, `ANOM-` anomalies, `GAP-` gaps, `COR-` corroboration
 containment recommendations (B); `SCOPE-<tier>` (C). Every number a provider may quote is a `FACT-` entry pointing
 at the exact report field. Fields are allowlisted (`id, module, report, type, basis, consequence_class, statement,
 severity, assets, sources, tables, accounts, time_window, confidence, limitations, exfiltration_evidence_kind,
-related`); text is control-character-free, re-scrubbed and truncated to 300 characters; accounts appear as the
+categories, related`); text is control-character-free, re-scrubbed and truncated to 300 characters; accounts appear as the
 opaque `ACCT-` references and approved labels Module B already publishes. Limits: 400 items, 200 facts, 256 KiB;
 Module A detail is dropped first. A module that has no released report is recorded as `not assessed`.
+
+An item eligible to establish exfiltration states exactly what it covers: `tables` (Module B corroborations and
+exfiltration table claims), `categories` (the data categories with people counted in Module C's
+`confirmed_exfiltration` tier) and `fact:` references in `related` (the only counts an exfiltration claim may quote:
+`FACT-C-tier-confirmed_exfiltration` and `FACT-C-exfil-category-*` for the scope tier;
+`FACT-B-confirmed_exfiltration-tables` and `FACT-B-sensitive_tables_by_class-exfiltration_evidenced` for Module B
+items).
 
 ## 4. Hypotheses, observations and validation
 
@@ -80,7 +87,8 @@ cited evidence mentions — shown labelled, never reported) or `rejected`:
 | `case_mismatch`, `bundle_mismatch` | output for another case or bundle; also a bundle whose content no longer matches its hash |
 | `unknown_evidence`, `unknown_asset`, `unknown_source` | ids not in this bundle (covers cross-case references) |
 | `promotion` | asserted class stronger than the strongest class among the cited supporting evidence |
-| `exfiltration_unsupported` | `exfiltration_evidenced` (or text asserting theft as fact) without a cited item carrying an eligible `exfiltration_evidence_kind` (`core.evidence.EXFILTRATION_EVIDENCE_KINDS`) |
+| `exfiltration_unsupported` | `exfiltration_evidenced` (or text asserting theft, leak or disclosure as fact) without a cited item carrying an eligible `exfiltration_evidence_kind` (`core.evidence.EXFILTRATION_EVIDENCE_KINDS`) |
+| `exfiltration_scope` | an exfiltration claim outside what the cited eligible items cover. Checked per sentence for every sentence that asserts exfiltration, and for every unqualified sentence of an `exfiltration_evidenced` hypothesis statement: a table not in the items' `tables`, a data category not in their `categories` (prose such as "identity numbers", "diagnoses", "clinical information"), a number that is not a cited in-scope fact, "all/every/entire" or population/tier wording, or a claim naming no in-scope table or category at all. Corroboration of table A plus access evidence for table B never supports a claim about B. Sentences qualified as not established, suspected, possible or unknown are outside the claim. |
 | `missing_logs_as_absence` | text concluding that nothing happened while gaps exist |
 | `unsupported_number` | a number in text not declared in `quantities`, or a quantity whose value differs from the fact |
 | `prohibited_content` | ID numbers, card/phone numbers, e-mail, credentials, URLs, unknown IP addresses or domains, clinical codes, shell/SQL command text, code markup |
@@ -183,10 +191,20 @@ conclusions, references and hashes — never prompts, raw model output or reject
 ## 9. Human review and approval
 
 Each accepted hypothesis must be reviewed (`accept` or `reject`, with a short note checked for identifiers) by a user
-holding the case reviewer role before a report can be drafted. The report separates: deterministic findings, AI
-analysis (advisory, attributed to the provider and model, with review status), human-reviewed conclusions, missing
-evidence (deterministic gaps and families not supplied, plus accepted AI suggestions), validation counts and
-rejection codes, references and provenance. Release uses the existing approver sign-in, operator/approver separation
+holding the case reviewer role before a report can be drafted. AI-proposed investigation steps (`S*`), remediation
+actions (`R*`) and missing-evidence suggestions (`M*`) are reviewed the same way, per item. In the signed report:
+
+* the AI analysis's hypotheses, steps, remediation and missing-evidence suggestions contain **only items a named
+  reviewer explicitly accepted**, each with its decision, reviewer, time and note;
+* validated items nobody reviewed are **segregated** in `ai_analysis.unreviewed_proposals` (and a separate PDF
+  section) under the notice "NOT REVIEWED … not approved, not part of this report's analysis"; remediation there
+  still carries `requires_hospital_authorisation: true, executed: false`;
+* items a reviewer rejected appear in neither.
+
+`investigator report` prints how many validated proposals were left unreviewed. The report separates: deterministic
+findings, AI analysis (advisory, attributed to the provider and model), unreviewed proposals, human-reviewed
+conclusions, missing evidence (deterministic gaps and families not supplied, plus accepted AI suggestions),
+validation counts and rejection codes, references and provenance. Release uses the existing approver sign-in, operator/approver separation
 and hospital key. A report draft is refused if any referenced module report is no longer the latest released version
 (`stale`). `investigator verify` re-renders the released body from the frozen input and compares bytes; separate model
 runs are not claimed to be reproducible.

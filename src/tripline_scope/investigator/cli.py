@@ -113,8 +113,11 @@ def cmd_report(args):
         ctx.input("frozen_result", body["frozen_result_sha256"])
         ctx.output("draft_report", draft.report_sha256)
     emit(args, {"draft_id": draft.draft_id, "version": draft.version, "report_sha256": draft.report_sha256, "run_id": rid,
-                "hypotheses": len(body["ai_analysis"]["hypotheses"])},
-         f"investigation draft v{draft.version} ({draft.draft_id}); release with: tscope release --kind investigation")
+                "hypotheses": len(body["ai_analysis"]["hypotheses"]),
+                "unreviewed_proposals": len(body["ai_analysis"]["unreviewed_proposals"]["items"])},
+         f"investigation draft v{draft.version} ({draft.draft_id}); "
+         f"{len(body['ai_analysis']['unreviewed_proposals']['items'])} validated proposal(s) not reviewed (listed "
+         f"separately as unreviewed, not approved); release with: tscope release --kind investigation")
 
 
 def cmd_verify(args):

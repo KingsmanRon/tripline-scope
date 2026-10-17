@@ -190,3 +190,78 @@ def test_closure_destroys_investigator_working_data(cloned):
     assert not any(run_dir.rglob("*")) if run_dir.exists() else True
     rc, v, _ = cli(["investigator", "verify", *cloned.c], ok=False)
     assert v["chain_ok"] is True and v["reproducible"] is None
+
+
+# ------------------------------------------------------------ recommendations need explicit human acceptance
+def _proposal_ids(store, run_id):
+    res = S.load_result(store, run_id)
+    return {k: [i["item_id"] for i in res[k]] for k in REP.PROPOSAL_FIELDS}
+
+
+def _review(ns, rid, item, decision):
+    cli(["investigator", "review", *ns.c, "--run", rid, "--item", item, "--decision", decision,
+         "--note", "checked against the cited evidence"], "rami")
+
+
+def test_unreviewed_recommendations_are_segregated_not_approved(cloned, monkeypatch):
+    rc, out, _ = _analyse(cloned)
+    rid = out["run_id"]
+    _review_all(cloned, out)
+    case, store = store_of(cloned.case_dir)
+    ids = _proposal_ids(store, rid)
+    assert len(ids["investigation_steps"]) >= 2 and ids["remediation"] and ids["missing_evidence"]
+    step_ok, step_no = ids["investigation_steps"][:2]
+    rem_ok, me_ok = ids["remediation"][0], ids["missing_evidence"][0]
+    for item in (step_ok, rem_ok, me_ok):
+        _review(cloned, rid, item, "accept")
+    _review(cloned, rid, step_no, "reject")
+    sections = []
+    real_render = REP.pdf.render
+    monkeypatch.setattr(REP.pdf, "render", lambda title, sub, secs, **k: sections.extend(secs) or real_render(title, sub, secs, **k))
+    rc, d, _ = cli(["investigator", "report", *cloned.c, "--run", rid], "olivia")
+    body = REP.content(store.read_json(f"{S.run_dir(rid)}/frozen.json"))
+    ai = body["ai_analysis"]
+    # only explicitly accepted proposals are part of the analysis, each carrying its reviewer's decision
+    assert [s["item_id"] for s in ai["investigation_steps"]] == [step_ok]
+    assert [r["item_id"] for r in ai["remediation"]] == [rem_ok]
+    assert [m["item_id"] for m in body["missing_evidence"]["ai_proposed"]] == [me_ok]
+    approved = ai["investigation_steps"] + ai["remediation"] + body["missing_evidence"]["ai_proposed"]
+    assert all(x["review"]["decision"] == "accept" and x["review"]["reviewer"] == "rami" for x in approved)
+    # everything validated but unreviewed is segregated and labelled; the rejected step appears nowhere
+    un = ai["unreviewed_proposals"]
+    assert un["approved"] is False and un["notice"].startswith("NOT REVIEWED")
+    expected = {i for k in ids.values() for i in k} - {step_ok, step_no, rem_ok, me_ok}
+    assert {u["item_id"] for u in un["items"]} == expected and expected
+    assert all(u["review"] == {"status": "not reviewed"} for u in un["items"])
+    assert all(u["requires_hospital_authorisation"] and not u["executed"] for u in un["items"]
+               if u["proposal_type"] == "remediation")
+    assert step_no not in json.dumps(ai) and step_no not in json.dumps(body["missing_evidence"])
+    assert d["unreviewed_proposals"] == len(expected)
+    titles = [s.heading for s in sections]
+    assert any(t.startswith("Unreviewed AI proposals (NOT reviewed, NOT approved") for t in titles)
+    # the segregated report is signed and reproduces like any other
+    cli(["release", *cloned.c, "--kind", "investigation", "--approver", "ines"])
+    rel = ReportStore(case).load("investigation")
+    assert rel["ai_analysis"]["unreviewed_proposals"]["items"] == un["items"]
+    rc, v, _ = cli(["investigator", "verify", *cloned.c], "rami")
+    assert v["chain_ok"] is True and v["reproducible"] is True
+
+
+def test_fully_reviewed_run_has_no_unreviewed_proposals(cloned):
+    rc, out, _ = _analyse(cloned)
+    rid = out["run_id"]
+    _review_all(cloned, out)
+    case, store = store_of(cloned.case_dir)
+    ids = _proposal_ids(store, rid)
+    for k in ids.values():
+        for item in k:
+            _review(cloned, rid, item, "accept")
+    rc, d, _ = cli(["investigator", "report", *cloned.c, "--run", rid], "olivia")
+    assert d["unreviewed_proposals"] == 0
+    body = REP.content(store.read_json(f"{S.run_dir(rid)}/frozen.json"))
+    ai = body["ai_analysis"]
+    assert ai["unreviewed_proposals"]["items"] == []
+    assert [s["item_id"] for s in ai["investigation_steps"]] == ids["investigation_steps"]
+    assert [r["item_id"] for r in ai["remediation"]] == ids["remediation"]
+    assert [m["item_id"] for m in body["missing_evidence"]["ai_proposed"]] == ids["missing_evidence"]
+    assert all(r["requires_hospital_authorisation"] and not r["executed"] for r in ai["remediation"])
