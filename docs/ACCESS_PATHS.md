@@ -247,6 +247,20 @@ Indicators with no provenance, an invalid value or an inverted validity range ar
 only reported inside the validity range, or as `time_unresolved`. Every match says: *"indicator match … not
 attribution"*. No outbound lookups are made.
 
+### 2a. Enterprise families: `fin_app_audit`, `bank_settlement` (`parsers/finapp.py`)
+
+The two families come from a validating adapter for normalised exports of a financial application's audit trail and of
+a bank settlement statement. The field set, mapping and rules are in
+[ENTERPRISE_FINANCIAL_INCIDENT.md](ENTERPRISE_FINANCIAL_INCIDENT.md) §3.
+
+The path engine builds no units from these families, so healthcare analyses are unchanged. Their events still
+appear in the timeline as context (`financial_action`, `settlement_record`, `privilege_change` for application role
+assignments), and the enterprise financial investigation reads them from the encrypted event store.
+
+Additive columns: `txn_ref, approval_ref, evidence_ref, amount_minor, currency, counterparty_ref`. These are written
+only by this adapter and are never included in the paths timeline attachment. Payee/counterparty references are
+stored only as keyed fingerprints (`CPTY-`).
+
 ## 3. Common event schema and time normalisation
 
 The PLAN §7 columns are `event_id` (`<SRC>:<ordinal>`), `source_id`, `source_family`, `ordinal`,

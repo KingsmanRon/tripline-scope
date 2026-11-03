@@ -100,6 +100,12 @@ def _day(v, what) -> str | None:
         raise ConfigError(f"financial config: {what} is not a date (YYYY-MM-DD)") from None
 
 
+# Internal address space (RFC 1918, RFC 4193, loopback, link-local). ``ipaddress.is_private`` is not used: it also
+# covers documentation and other reserved ranges, which are not the organisation's network.
+_INTERNAL = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
+                                                "169.254.0.0/16", "fc00::/7", "::1/128", "fe80::/10")]
+
+
 def _private(ip: str | None) -> bool | None:
     if not ip:
         return None
@@ -107,7 +113,7 @@ def _private(ip: str | None) -> bool | None:
         a = ipaddress.ip_address(ip)
     except ValueError:
         return None
-    return a.is_private or a.is_loopback
+    return any(a.version == n.version and a in n for n in _INTERNAL)
 
 
 def _iso(t) -> str | None:

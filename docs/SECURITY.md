@@ -155,3 +155,38 @@ python3 -c "import json,base64,sys; s=[x for x in json.load(open('signatures.jso
 openssl pkeyutl -verify -pubin -inkey hospital.pub -rawin -in release.json -sigfile hospital.sig
 sha256sum report.json        # must equal release.json "report_sha256"
 ```
+
+## 7. Enterprise profile (financial-system investigation)
+
+The enterprise profile adds no new key, cipher, signature or network path. The differences are:
+
+**Report kind.** A new released report kind, `financial`, is signed by the hospital/organisation key, chained, and
+verified by `tscope-verify` exactly like the others.
+
+**Working data**, all encrypted through `CaseStore`:
+- `work/financial/analysis.json`;
+- `work/financial/refs.json`, which maps opaque `TXN-` ids to raw transaction references for authorised
+  investigators;
+- the Module B event columns `txn_ref, approval_ref, evidence_ref, amount_minor, currency, counterparty_ref`.
+
+**Identifiers in released outputs are case-keyed and opaque:**
+
+| Prefix | Identifies |
+|---|---|
+| `ACCT-` | accounts |
+| `FSN-` | sessions |
+| `TXN-` | transactions |
+| `PEV-` | privilege events |
+| `FGP-` | gaps |
+| `FREC-` | advisory items |
+| `CPTY-` | counterparties |
+
+These are on the redaction allow-list as opaque references. Payee and bank account numbers are fingerprinted at
+parse time; credentials are never read. Before drafting, the financial report refuses to be written if any
+identifier-like value is present.
+
+**Inputs** are read-only exports registered with custody, as for every other module. No live connection is made.
+
+**Remediation** is advisory only (`executed: false, requires_authorisation: true`).
+
+See [ENTERPRISE_PROFILE.md](ENTERPRISE_PROFILE.md) and [ENTERPRISE_LIMITATIONS.md](ENTERPRISE_LIMITATIONS.md).

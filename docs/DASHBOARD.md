@@ -82,6 +82,23 @@ determinable", or that does not exist yet comes back as a status and is shown as
 *Not assessed*, *Awaiting analysis* (nothing released yet) or *Not performed*. A real zero from a report
 (for example an observed-access count of 0 people) is shown as 0.
 
+### Enterprise profile cases
+
+On a case opened with `--profile enterprise`, the workbench changes as follows:
+- **E · People becomes E · Financial activity** (`/api/financial`). People answers "not applicable" for an
+  enterprise case. The section reads the released `financial` report through the integrity gate. It shows:
+  - the financial-impact status and statement;
+  - evidence-backed counts, and suspicious amounts per category per currency (never converted);
+  - the sessions with their identity, remote-access, host-logon and privilege link labels;
+  - privilege events and transactions with their evidence category and approval indicators;
+  - evidence gaps, Module A exposure findings for the accounts involved, and advisory containment considerations.
+- **Account references only.** The section shows `ACCT-` references only; account labels are withheld.
+- **Auditing.** Views of the section are audited like People.
+- **Overview.** The overview shows the profile and the enterprise report set (`exposure, paths, financial,
+  investigation, readiness`).
+
+The HTML for healthcare cases is unchanged.
+
 ## 5. Reading the evidence labels
 
 **Links in an access path** (Module B's own labels, never upgraded by the workbench; an unknown label would be

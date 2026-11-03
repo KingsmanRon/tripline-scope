@@ -16,9 +16,9 @@ never content.
 
 Financial claims (enterprise profile): Tripline never establishes fraud or any person's responsibility, so text
 asserting proven fraud, an offence, guilt or a named perpetrator is rejected (``financial_unsupported``). Text
-asserting that funds moved, were paid out, settled or lost is accepted only when the item cites a transaction whose
-evidence category is ``settled_corroborated`` (independent settlement record), and every transaction it names has
-that category. "No suspicious activity" statements while gaps exist are ``missing_logs_as_absence``.
+asserting that funds moved, were paid out, settled or lost is accepted only when it names the transaction(s) it is
+about and every one of them is cited and has the evidence category ``settled_corroborated`` (independent settlement
+record). "No suspicious activity" statements while gaps exist are ``missing_logs_as_absence``.
 
 Exfiltration scope: eligible evidence establishes exfiltration only for what it covers (its ``tables``, data
 ``categories`` and ``fact:`` references). Every sentence that asserts exfiltration, and every unqualified sentence of
@@ -116,8 +116,9 @@ _FRAUD = [
 ]
 # money movement and loss: accepted only with a cited, independently settled transaction
 _MONEY = [
-    re.compile(r"(?i)\b(?:funds|money|monies|payments?|amounts?|transactions?|TXN-[0-9a-f]{12})\s+(?:was|were|has been|"
-               r"have been|had been)\s+(?:transferred|paid out|paid|sent|moved|remitted|wired|settled|received)"),
+    re.compile(r"(?i)\b(?:funds|money|monies|payments?|amounts?|transactions?|TXN-[0-9a-f]{12})\s+(?:that\s+|which\s+)?"
+               r"(?:was|were|has been|have been|had been)\s+(?:transferred|paid out|paid|sent|moved|remitted|wired|settled|"
+               r"received)"),
     re.compile(r"(?i)\b(?:funds|money)\s+(?:left|reached|moved to)\b"),
     re.compile(r"(?i)\b(?:financial\s+)?loss(?:es)?\s+(?:of|occurred|was incurred|were incurred|amount(?:s|ed|ing)?\s+to|"
                r"total(?:l?ing|s)?)\b"),
@@ -278,8 +279,8 @@ def _financial_codes(s: str, settled: set[str]) -> set[str]:
             codes.add("financial_unsupported")
         if _asserts(_MONEY, sent):
             named = set(_TXN.findall(sent))
-            # a cited, independently settled transaction is required, and every transaction named must be one
-            if not settled or not named <= settled:
+            # the sentence must name the transaction(s) it is about, each cited and independently settled
+            if not named or not named <= settled:
                 codes.add("financial_unsupported")
     return codes
 

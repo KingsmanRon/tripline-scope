@@ -39,7 +39,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
-PASSWORD = "Synthetic-Pass-2026!"
+PASSWORD = "Synthetic-Pass-2026!"  # noqa: S105 - synthetic demo users only
 EXPECTED = {"a": "not_determinable", "b": "attempted_and_stopped", "c": "settlement_corroborated"}
 console: list[str] = []
 timings: dict[str, float] = {}
