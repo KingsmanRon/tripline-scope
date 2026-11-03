@@ -63,7 +63,7 @@ These figures are not a throughput claim.
 |---|---|---|
 | Enterprise tests | `pytest tests/enterprise` | 73 passed: transactions 18, adapter 20, pipeline 14, investigator 16, workbench 5 |
 | Complete suite, Docker up (SQL Server, PostgreSQL, both lab-breach demos) | `pytest -q -rs tests` | **614 passed, 1 failed, 3 skipped** (opt-in `-m slow` benchmarks), 23 min 34 s. The failure was a function-level `from conftest import clone` in a new enterprise test that resolved another directory's conftest under full collection. It was fixed by a module-level import, and the affected tests then passed under full-tree collection (35 passed, 583 deselected). |
-| Same, networking disabled | `make test-offline` | OFFLINE_RESULT |
+| Same, networking disabled | `make test-offline` | **603 passed**, 15 deselected (Docker/slow), 14 min 39 s (530 pre-existing + 73 enterprise) |
 | Healthcare investigator regression after the bundle, validator and fixture changes | `pytest tests/investigator` | 69 passed |
 | Healthcare exposure regression after E1–E5 | `pytest tests/exposure` | 95 passed, 1 skipped (SQL Server container down at that time; passed in the complete run) |
 | Lint | `ruff check src tests demo` | clean |
