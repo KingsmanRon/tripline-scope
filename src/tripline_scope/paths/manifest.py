@@ -58,6 +58,8 @@ FORMATS = {
     "proxy": {"csv", "jsonl", "json", "kv"},
     "generic": {"csv", "jsonl", "json", "kv"},
     "indicators": {"csv", "json", "jsonl"},
+    "fin_app_audit": {"csv", "json", "jsonl"},
+    "bank_settlement": {"csv", "json", "jsonl"},
 }
 MAPPED_FAMILIES = {"vpn", "firewall", "proxy", "generic"}
 # Formats whose specification fixes timestamps to UTC.
@@ -243,6 +245,15 @@ def load_manifest(path: Path | str) -> Manifest:
                 raise _err(where, f"{family} sources need a documented mapping with 'fields'")
             if "ts" not in mapping["fields"]:
                 raise _err(where, "mapping.fields.ts (timestamp field) is required")
+        if family in ("fin_app_audit", "bank_settlement"):
+            from .parsers.finapp import validate_mapping as _fin_mapping
+
+            if mapping is not None and not isinstance(mapping, dict):
+                raise _err(where, "mapping must be a mapping")
+            try:
+                _fin_mapping(mapping, family)
+            except Exception as exc:  # ConfigError with the field names
+                raise _err(where, str(exc)) from exc
         if family == "apache" or family == "nginx":
             if fmt == "custom" and not (src.get("options") or {}).get("log_format"):
                 raise _err(where, "custom web log format needs options.log_format")

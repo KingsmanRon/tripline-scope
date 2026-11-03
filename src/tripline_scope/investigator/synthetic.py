@@ -31,7 +31,7 @@ from tripline_scope.core.errors import ConfigError, IntegrityError
 from tripline_scope.core.timeutil import now_iso
 
 SCHEMA = "tripline.synthetic-registry/v1"
-GENERATORS = {"synth", "exposure-estate", "paths-logs", "lab-bak"}
+GENERATORS = {"synth", "exposure-estate", "paths-logs", "lab-bak", "enterprise-synthetic"}
 _FILE = "synthetic_registry.json"
 
 

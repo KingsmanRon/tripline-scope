@@ -175,16 +175,19 @@ def cmd_case_init(args):
         raise ConfigError("cases are opened by an admin or by one of the case's approvers")
     case = Case.init(args.dir, home, case_id=args.case_id, mode=args.mode, incident_start=args.incident_start,
                      incident_end=args.incident_end, operators=args.operator or [], reviewers=args.reviewer or [],
-                     approvers=args.approver or [], retain_reports_until=args.retain_until, title=args.title or "")
-    with command("case init", home=home, case=case, params={"mode": args.mode, "team": case.team()}) as ctx:
+                     approvers=args.approver or [], retain_reports_until=args.retain_until, title=args.title or "",
+                     profile=args.profile)
+    with command("case init", home=home, case=case, params={"mode": args.mode, "profile": case.profile,
+                                                             "team": case.team()}) as ctx:
         ctx.output("case.yaml", case.config_sha256())
-    emit(args, {"case_id": case.case_id, "dir": str(case.root), "mode": case.mode})
+    emit(args, {"case_id": case.case_id, "dir": str(case.root), "mode": case.mode, "profile": case.profile})
 
 
 def cmd_case_show(args):
     case = case_of(args)
     out = {k: case.config.get(k) for k in ("case_id", "mode", "incident_window", "team", "legal_hold", "retention",
                                             "declared_gaps")}
+    out["profile"] = case.profile
     out["status"] = case.state.get("status")
     out["sources"] = [{k: s.get(k) for k in ("source_id", "kind", "label", "evidence_role", "mode", "received_at")}
                       for s in case.sources()]
@@ -415,6 +418,8 @@ def register(sub):
     p.add_argument("dir")
     p.add_argument("--case-id", required=True)
     p.add_argument("--mode", choices=["incident", "readiness"], default="incident")
+    p.add_argument("--profile", choices=["healthcare", "enterprise"], default="healthcare",
+                   help="investigation profile (default healthcare; enterprise adds financial-system investigation)")
     p.add_argument("--incident-start")
     p.add_argument("--incident-end")
     p.add_argument("--operator", action="append")

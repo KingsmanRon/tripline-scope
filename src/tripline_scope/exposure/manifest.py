@@ -92,6 +92,15 @@ class PrincipalDecl:
 
 
 @dataclass
+class EnterpriseDecl:
+    """``enterprise:`` block (enterprise profile; controls E1–E5)."""
+    financial_assets: list[str]
+    inputs: dict[str, Path]
+    copy_patterns: list[str] | None = None
+    privileged_operations: list[str] | None = None
+
+
+@dataclass
 class Manifest:
     path: Path
     base_dir: Path
@@ -121,6 +130,7 @@ class Manifest:
     stale_after_days: int
     suppress_test_fixtures: bool
     hospital_domains: list[str]
+    enterprise: EnterpriseDecl | None = None
 
     def normalised(self) -> dict:
         """Manifest content as declared (relative paths kept), for the configuration hash."""
@@ -130,6 +140,8 @@ class Manifest:
         paths = [r.path for r in self.roots]
         paths += [d.export for d in self.databases if d.export]
         paths += list(self.identity.values())
+        if self.enterprise is not None:
+            paths += list(self.enterprise.inputs.values())
         for p in (self.assets_path,):
             if p:
                 paths.append(p)
@@ -279,7 +291,7 @@ def load_manifest(path: Path | str) -> Manifest:
         if e <= s:
             raise ConfigError("observation_window ends before it starts")
         window = {"start": _iso(s), "end": _iso(e)}
-    if not (roots or dbs or ident):
+    if not (roots or dbs or ident or doc.get("enterprise")):
         raise ConfigError("manifest declares no inputs (roots, databases or identity exports)")
     assets_path = _path(base, doc["assets"], "assets", directory=False) if doc.get("assets") else None
     assets = AssetMap.load(assets_path) if assets_path else AssetMap([])
@@ -336,7 +348,38 @@ def load_manifest(path: Path | str) -> Manifest:
         stale_after_days=int(doc.get("stale_after_days") or 90),
         suppress_test_fixtures=bool(doc.get("suppress_test_fixtures", True)),
         hospital_domains=[str(x).lower() for x in (doc.get("hospital_domains") or [])],
+        enterprise=_enterprise(doc.get("enterprise"), base, assets),
     )
+
+
+def _enterprise(e, base: Path, assets: AssetMap) -> EnterpriseDecl | None:
+    from .enterprise import INPUT_KEYS
+
+    if e is None:
+        return None
+    if not isinstance(e, dict):
+        raise ConfigError("enterprise: must be a mapping")
+    unknown = set(e) - set(INPUT_KEYS) - {"financial_assets", "copy_patterns", "privileged_operations"}
+    if unknown:
+        raise ConfigError(f"enterprise: unknown keys {sorted(unknown)}")
+    fin = []
+    for a in e.get("financial_assets") or []:
+        r = assets.resolve(str(a)) if assets.assets else None
+        if assets.assets and not (str(a) in assets.assets or r):
+            raise ConfigError("enterprise.financial_assets lists an asset that is not in the asset map")
+        fin.append(r or str(a))
+    if not fin:
+        raise ConfigError("enterprise.financial_assets must name at least one financial-system asset")
+    inputs = {k: _path(base, e[k], f"enterprise.{k}", directory=False) for k in INPUT_KEYS if e.get(k)}
+    pats = [str(p)[:120] for p in (e.get("copy_patterns") or [])] or None
+    for p in pats or []:
+        try:
+            re.compile(p)
+        except re.error:
+            raise ConfigError("enterprise.copy_patterns contains an invalid pattern") from None
+    ops = [str(o)[:60] for o in (e.get("privileged_operations") or [])] or None
+    return EnterpriseDecl(financial_assets=sorted(set(fin)), inputs=inputs, copy_patterns=pats,
+                          privileged_operations=ops)
 
 
 def config_sha256(m: Manifest, detector_config: dict) -> str:

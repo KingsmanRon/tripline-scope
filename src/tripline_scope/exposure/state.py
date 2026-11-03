@@ -60,6 +60,7 @@ class ScanState:
         self.rec = rec
         self.findings: dict[str, Finding] = {}
         self.source_for: dict[str, str] = {}
+        self.input_sha256: dict[str, str] = {}   # unit -> content hash of the registered input (enterprise findings)
         self.secret_index: dict[str, list[str]] = {}
         self.credential_principals: list[dict] = []
         self.principal_rights: list[dict] = []     # A2 -> A5: effective rights per (database, principal)

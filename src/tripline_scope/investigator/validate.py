@@ -11,7 +11,14 @@ investigation step, remediation action, unproven assertion, summary) receives a 
 Codes: ``schema``, ``case_mismatch``, ``bundle_mismatch``, ``unknown_evidence``, ``unknown_asset``,
 ``unknown_source``, ``promotion``, ``exfiltration_unsupported``, ``exfiltration_scope``, ``missing_logs_as_absence``,
 ``unsupported_number``, ``prohibited_content``, ``unsupported_conclusion``, ``confidence_label``, ``execution_claim``,
-``untraceable_reference`` (unverified only). Diagnostics carry codes and item ids only, never content.
+``untraceable_reference`` (unverified only), ``financial_unsupported``. Diagnostics carry codes and item ids only,
+never content.
+
+Financial claims (enterprise profile): Tripline never establishes fraud or any person's responsibility, so text
+asserting proven fraud, an offence, guilt or a named perpetrator is rejected (``financial_unsupported``). Text
+asserting that funds moved, were paid out, settled or lost is accepted only when the item cites a transaction whose
+evidence category is ``settled_corroborated`` (independent settlement record), and every transaction it names has
+that category. "No suspicious activity" statements while gaps exist are ``missing_logs_as_absence``.
 
 Exfiltration scope: eligible evidence establishes exfiltration only for what it covers (its ``tables``, data
 ``categories`` and ``fact:`` references). Every sentence that asserts exfiltration, and every unqualified sentence of
@@ -31,11 +38,11 @@ from tripline_scope.core.redact import find_identifier_like
 
 from .schema import RESULT_SCHEMA, SchemaError, check_candidate, parse
 
-VALIDATOR_VERSION = "investigator-validator/1.1.0"
+VALIDATOR_VERSION = "investigator-validator/1.2.0"
 ORDER = ["access_observed", "export_or_staging_observed", "egress_suspected", "exfiltration_evidenced"]
 HARD = {"schema", "case_mismatch", "bundle_mismatch", "unknown_evidence", "unknown_asset", "unknown_source",
         "promotion", "exfiltration_unsupported", "exfiltration_scope", "missing_logs_as_absence", "unsupported_number",
-        "prohibited_content", "unsupported_conclusion", "confidence_label", "execution_claim"}
+        "prohibited_content", "unsupported_conclusion", "confidence_label", "execution_claim", "financial_unsupported"}
 
 _IPV4 = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
 _DOMAIN = re.compile(r"(?i)\b(?:[a-z0-9-]+\.)+(?:com|org|net|io|za|co|gov|edu|example|info|ru|cn|xyz|onion|local|biz|me|top)\b")
@@ -91,7 +98,33 @@ _ABSENCE = [
                r"(?:occurred|happened|took place)"),
     re.compile(r"(?i)\b(?:was|were)\s+not\s+(?:accessed|compromised|exfiltrated|breached|touched)"),
     re.compile(r"(?i)\b(?:rules?|ruled)\s+out\b|\bproves?\s+that\s+no\b|\bconfirms?\s+(?:that\s+)?no\b"),
+    re.compile(r"(?i)\bno\s+(?:suspicious|unauthori[sz]ed|fraudulent|irregular)\s+(?:activity|transactions?|payments?|"
+               r"access|changes?)\s+(?:occurred|happened|took place|(?:was|were)\s+(?:made|carried out|performed))"),
+    re.compile(r"(?i)\bthere\s+(?:was|were|is|are)\s+no\s+(?:suspicious|unauthori[sz]ed|fraudulent|irregular)\b"),
 ]
+# fraud, offences and blame: never established by Tripline, so never accepted as fact
+_FRAUD = [
+    re.compile(r"(?i)\b(?:confirmed|proven|established|clear|definite|actual|evident)\s+(?:payment\s+)?"
+               r"(?:fraud|embezzlement|misappropriation)"),
+    re.compile(r"(?i)\b(?:fraud|embezzlement|misappropriation)\s+(?:is|was|has been|had been)\s+(?:proven|confirmed|"
+               r"established|committed|perpetrated|carried out)"),
+    re.compile(r"(?i)\bcommitted\s+(?:fraud|an?\s+offen[cs]e|a\s+crime|theft|embezzlement)"),
+    re.compile(r"(?i)\b(?:defrauded|embezzled)\b"),
+    re.compile(r"(?i)\b(?:is|was|are|were)\s+guilty\b|\bguilty\s+of\b"),
+    re.compile(r"(?i)\b(?:the\s+)?(?:perpetrator|culprit|fraudster)s?\b"),
+    re.compile(r"(?i)\bfraudulent\s+(?:payments?|transactions?|transfers?)\s+(?:was|were)\s+(?:made|paid|processed|executed)"),
+]
+# money movement and loss: accepted only with a cited, independently settled transaction
+_MONEY = [
+    re.compile(r"(?i)\b(?:funds|money|monies|payments?|amounts?|transactions?|TXN-[0-9a-f]{12})\s+(?:was|were|has been|"
+               r"have been|had been)\s+(?:transferred|paid out|paid|sent|moved|remitted|wired|settled|received)"),
+    re.compile(r"(?i)\b(?:funds|money)\s+(?:left|reached|moved to)\b"),
+    re.compile(r"(?i)\b(?:financial\s+)?loss(?:es)?\s+(?:of|occurred|was incurred|were incurred|amount(?:s|ed|ing)?\s+to|"
+               r"total(?:l?ing|s)?)\b"),
+    re.compile(r"(?i)\b(?:incurred|suffered|sustained)\s+(?:a\s+)?(?:financial\s+)?loss"),
+    re.compile(r"(?i)\blost\s+(?:ZAR|USD|EUR|GBP|R\s?\d|\$|funds|money)"),
+]
+_TXN = re.compile(r"\bTXN-[0-9a-f]{12}\b")
 _EXEC = re.compile(r"(?i)\b(?:has|have)\s+(?:already\s+)?been\s+(?:disabled|revoked|rotated|blocked|deleted|isolated|"
                    r"quarantined|reset)\b|\bI\s+(?:have|will|am going to)\s+(?:disable|revoke|block|run|execute|delete|rotate)")
 _NUM = re.compile(r"(?<![\w.])\d+(?:[ ,]\d{3})*(?:\.\d+)?%?(?![\w])")
@@ -143,6 +176,10 @@ class Context:
         ok = it.get("exfiltration_evidence_kind") in EXFILTRATION_EVIDENCE_KINDS and \
             it.get("consequence_class") == "exfiltration_evidenced"
         return it if ok else None
+
+    def settled(self, ids) -> set[str]:
+        """Cited transactions whose evidence category is ``settled_corroborated``."""
+        return {i for i in ids if (self.items.get(i) or {}).get("financial_category") == "settled_corroborated"}
 
     def eligible_exfil(self, ids) -> bool:
         return any(self._eligible(i) for i in ids)
@@ -234,8 +271,21 @@ def _scope_check(s: str, scope: ExfilScope | None, scope_values: list[float], *,
     return violation, scoped
 
 
+def _financial_codes(s: str, settled: set[str]) -> set[str]:
+    codes = set()
+    for sent in _SENT.split(s):
+        if _asserts(_FRAUD, sent):
+            codes.add("financial_unsupported")
+        if _asserts(_MONEY, sent):
+            named = set(_TXN.findall(sent))
+            # a cited, independently settled transaction is required, and every transaction named must be one
+            if not settled or not named <= settled:
+                codes.add("financial_unsupported")
+    return codes
+
+
 def _text_codes(strings, ctx: Context, *, quantities: list[float], eligible_exfil: bool, check_theft: bool = True,
-                scope: ExfilScope | None = None, scope_values: list[float] = ()) -> set[str]:
+                scope: ExfilScope | None = None, scope_values: list[float] = (), settled: set[str] = frozenset()) -> set[str]:
     codes = set()
     for s in strings:
         if not s:
@@ -248,6 +298,8 @@ def _text_codes(strings, ctx: Context, *, quantities: list[float], eligible_exfi
             codes.add("exfiltration_unsupported")
         elif check_theft and _scope_check(s, scope, list(scope_values), class_claim=False)[0]:
             codes.add("exfiltration_scope")
+        if check_theft:
+            codes |= _financial_codes(s, set(settled))
         if ctx.has_gaps and _asserts(_ABSENCE, s, _HEDGE):
             codes.add("missing_logs_as_absence")
     return codes
@@ -310,7 +362,8 @@ def _hypothesis(h: dict, ctx: Context) -> dict:
             codes.add("exfiltration_scope")
     texts = [h["statement"], h["confidence_rationale"], *h["alternative_explanations"],
              *[t["evidence_needed"] for t in h["tests"]], *[t["would_resolve"] for t in h["tests"]]]
-    codes |= _text_codes(texts, ctx, quantities=qvals, eligible_exfil=eligible, scope=scope, scope_values=svals)
+    codes |= _text_codes(texts, ctx, quantities=qvals, eligible_exfil=eligible, scope=scope, scope_values=svals,
+                         settled=ctx.settled(h["supporting_evidence"]))
     codes |= _text_codes(h["cannot_conclude"], ctx, quantities=qvals, eligible_exfil=eligible, check_theft=False)
     unverified = _untraceable([h["statement"]], ctx, cited)
     return _verdict(codes, unverified)
@@ -324,7 +377,8 @@ def _listed(it: dict, ctx: Context, *, ids_key: str, text_keys: tuple, assets_ke
     if assets_key and not set(it.get(assets_key) or []) <= ctx.assets:
         codes.add("unknown_asset")
     texts = [it[k] for k in text_keys]
-    codes |= _text_codes(texts, ctx, quantities=[], eligible_exfil=ctx.eligible_exfil(ids), scope=ctx.exfil_scope(ids))
+    codes |= _text_codes(texts, ctx, quantities=[], eligible_exfil=ctx.eligible_exfil(ids), scope=ctx.exfil_scope(ids),
+                         settled=ctx.settled(ids))
     if assets_key and any(_EXEC.search(t) for t in texts):
         codes.add("execution_claim")
     return _verdict(codes, _untraceable(texts, ctx, ids) if ids else False)

@@ -19,6 +19,20 @@ CONTROLS = {
     "A4": "Risky database configuration",
     "A5": "Supplier access",
 }
+# Enterprise profile controls: evaluated, and reported, only when the scan manifest declares ``enterprise:``.
+ENTERPRISE_CONTROLS = {
+    "E1": "Privileged financial-system access without approved role mapping",
+    "E2": "Service or supplier privileges exceeding declared requirement",
+    "E3": "Financial data copies outside the approved inventory",
+    "E4": "Missing audit coverage for privileged financial operations",
+    "E5": "Supplier access beyond its authorised window",
+}
+ALL_CONTROLS = {**CONTROLS, **ENTERPRISE_CONTROLS}
+
+
+def controls_for(enterprise: bool) -> dict:
+    """The controls a scan reports: A1–A5, plus E1–E5 when the enterprise block was declared."""
+    return ALL_CONTROLS if enterprise else CONTROLS
 SEVERITIES = ("critical", "high", "medium", "low", "info")
 LEVELS = ("low", "medium", "high")
 STATES = ("new", "open", "mitigated", "accepted-risk", "not-assessed")
@@ -68,6 +82,17 @@ FIX_ACTIONS = {
     "link-account-to-contract": "Link the external account to a current supplier contract and owner, or disable it.",
     "enforce-password-policy": "Enforce the password policy and expiry for SQL-authenticated logins or replace them with "
                                "directory-integrated accounts.",
+    "map-or-remove-privileged-access": "Confirm the business need with the system owner; record an approved role "
+                                       "mapping for the entitlement or remove it.",
+    "align-privileges-to-requirement": "Reduce the account's rights to its declared operational requirement, or record "
+                                       "an approved, justified requirement for the higher level.",
+    "inventory-or-remove-financial-copy": "Confirm ownership and purpose; add the copy to the approved data inventory "
+                                          "with controls, or move or remove it under the retention schedule (never "
+                                          "delete evidence automatically).",
+    "audit-privileged-financial-operations": "Enable and protect security auditing for the privileged financial "
+                                             "operation, retain the logs centrally and monitor them.",
+    "end-supplier-access-window": "Disable the supplier account (or reduce it to the new approved window), review its "
+                                  "activity after the window and record the decision.",
 }
 
 
@@ -165,7 +190,7 @@ class Finding:
     related_findings: list[str] = field(default_factory=list)
 
     def __post_init__(self):
-        if self.control_id not in CONTROLS:
+        if self.control_id not in ALL_CONTROLS:
             raise ValueError("unknown control")
         if self.impact not in LEVELS or self.likelihood not in LEVELS:
             raise ValueError("impact/likelihood must be low|medium|high")
@@ -184,7 +209,7 @@ class Finding:
         d = {
             "finding_id": self.finding_id,
             "control_id": self.control_id,
-            "control": CONTROLS[self.control_id],
+            "control": ALL_CONTROLS[self.control_id],
             "rule_id": self.rule_id,
             "title": self.title,
             "severity": self.severity,

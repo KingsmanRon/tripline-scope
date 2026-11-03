@@ -31,7 +31,15 @@ from tscope_verify import formats as F
 from .integrity import IntegrityFailure, TrustGate
 
 # Report kinds the workbench shows and serves; files that may be downloaded from a released version.
-REPORT_KINDS = ("exposure", "paths", "scope", "investigation", "readiness")
+REPORT_KINDS = ("exposure", "paths", "scope", "investigation", "readiness", "financial")
+# Report kinds a case shows, by profile (healthcare is unchanged; the enterprise profile has no Module C scope
+# report and adds the financial report).
+PROFILE_REPORT_KINDS = {"healthcare": ("exposure", "paths", "scope", "investigation", "readiness"),
+                        "enterprise": ("exposure", "paths", "financial", "investigation", "readiness")}
+
+
+def report_kinds(case: Case) -> tuple[str, ...]:
+    return PROFILE_REPORT_KINDS[getattr(case, "profile", "healthcare")]
 SERVABLE_FILES = {F.REPORT_FILE: "application/json", "report.pdf": "application/pdf",
                   F.RELEASE_FILE: "application/json", F.SIGNATURES_FILE: "application/json"}
 
@@ -40,7 +48,7 @@ CONSEQUENCE_CLASSES = ("access_observed", "export_or_staging_observed", "egress_
 # Event-level classes in the Module B timeline add ``not_applicable`` (context events) and ``no_access_observed``.
 TIMELINE_CLASSES = CONSEQUENCE_CLASSES + ("not_applicable", "no_access_observed")
 FAMILIES = ("mssql_audit", "pg_log", "pgaudit", "iis", "apache", "nginx", "win_security", "entra_signin",
-            "vpn", "firewall", "proxy", "indicators", "generic")
+            "vpn", "firewall", "proxy", "indicators", "generic", "fin_app_audit", "bank_settlement")
 # Log-source families Module B can use, grouped by the part of an access path they can establish.
 FAMILY_GROUPS = (
     ("identity provider sign-ins", ("entra_signin",)),
@@ -73,6 +81,11 @@ EVIDENCE_PREFIXES = {
     "IM-": ("paths", "indicator_match"),
     "XA-": ("exposure", "coverage_gap"),
     "SCOPE-": ("scope", "scope_tier"),
+    "FSN-": ("financial", "fin_session"),
+    "TXN-": ("financial", "transaction"),
+    "PEV-": ("financial", "privilege_event"),
+    "FGP-": ("financial", "gap"),
+    "FREC-": ("financial", "recommendation"),
     "FACT-": (None, "quantity"),
 }
 _EVIDENCE_ID = re.compile(r"^[A-Z]{2,5}-[A-Za-z0-9_.:-]{1,64}$")
@@ -89,6 +102,10 @@ def awaiting(reason: str) -> dict:
 
 def not_assessed(reason: str) -> dict:
     return {"status": "not_assessed", "reason": reason}
+
+
+def not_applicable(reason: str) -> dict:
+    return {"status": "not_applicable", "reason": reason}
 
 
 def not_determinable(reason: str) -> dict:
@@ -184,7 +201,7 @@ def _ts(text) -> dt.datetime | None:
 def overview(case: Case, gate: TrustGate) -> dict:
     rs = ReportStore(case)
     kinds, approvals = {}, []
-    for kind in REPORT_KINDS:
+    for kind in report_kinds(case):
         vs = rs.versions(kind)
         draft_count = len(rs.drafts(kind))
         if not vs:
@@ -215,6 +232,7 @@ def overview(case: Case, gate: TrustGate) -> dict:
     out = {
         "case_id": case.case_id,
         "mode": case.mode,
+        "profile": case.profile,
         "title": case.config.get("title") or "",
         "incident_window": {"start": window.get("start"), "end": window.get("end")} if window.get("start")
         else not_assessed("no incident window (readiness case)"),
@@ -733,6 +751,9 @@ def people_view(prelim: tuple[int, dict] | None, refined: tuple[int, dict] | Non
 
 
 def people(case: Case, gate: TrustGate) -> dict:
+    if case.profile == "enterprise":
+        return not_applicable("patient-impact scoping (Module C) is not part of the enterprise profile; see Financial "
+                              "activity")
     try:
         return _people(case, gate)
     except IntegrityFailure as exc:
@@ -770,7 +791,8 @@ def _evidence_index(case: Case, gate: TrustGate) -> dict[str, set[str]]:
     """Ids present in the verified released reports (an untrusted report contributes none)."""
     idx: dict[str, set[str]] = {"finding": set(), "path": set(), "table_claim": set(), "anomaly": set(),
                                 "gap": set(), "corroboration": set(), "recommendation": set(),
-                                "indicator_match": set(), "coverage_gap": set(), "scope_tier": set()}
+                                "indicator_match": set(), "coverage_gap": set(), "scope_tier": set(),
+                                "fin_session": set(), "transaction": set(), "privilege_event": set()}
     e = _trusted(case, "exposure", gate)
     if e:
         idx["finding"] = {f.get("finding_id") for f in e[2].get("findings") or []}
@@ -781,15 +803,24 @@ def _evidence_index(case: Case, gate: TrustGate) -> dict[str, set[str]]:
     sc = _trusted(case, "scope", gate)
     if sc:
         idx["scope_tier"] = {f"SCOPE-{t}" for t in (sc[2].get("scope_tiers") or {})}
+    f = _trusted(case, "financial", gate)
+    if f:
+        fb = f[2]
+        idx["fin_session"] = {x.get("session_id") for x in fb.get("sessions") or []}
+        idx["transaction"] = {x.get("transaction_id") for x in fb.get("transactions") or []}
+        idx["privilege_event"] = {x.get("pev_id") for x in fb.get("privilege_events") or []}
+        idx["gap"] = idx["gap"] | {x.get("gap_id") for x in fb.get("gaps") or []}
+        idx["recommendation"] = {x.get("rec_id") for x in (fb.get("containment") or {}).get("recommendations") or []}
     p = _trusted(case, "paths", gate)
     if p:
         b = p[2]
         idx["path"] = {x.get("path_id") for x in b.get("paths") or []}
         idx["table_claim"] = {(t.get("claim") or {}).get("claim_id") for t in b.get("tables") or []}
         idx["anomaly"] = {a.get("anomaly_id") for a in b.get("anomalies") or []}
-        idx["gap"] = {g.get("gap_id") for g in b.get("gaps") or []}
+        idx["gap"] = idx["gap"] | {g.get("gap_id") for g in b.get("gaps") or []}
         idx["corroboration"] = {c.get("corroboration_id") for c in (b.get("inputs") or {}).get("corroborations") or []}
-        idx["recommendation"] = {r.get("rec_id") for r in (b.get("containment") or {}).get("recommendations") or []}
+        idx["recommendation"] = idx.get("recommendation", set()) | {
+            r.get("rec_id") for r in (b.get("containment") or {}).get("recommendations") or []}
         idx["indicator_match"] = {m.get("match_id") for m in b.get("indicator_matches") or []}
     return idx
 
@@ -869,7 +900,7 @@ def investigation(case: Case, store, gate: TrustGate) -> dict:
         return {"status": "not_performed", "reason": "no authorised AI analysis has been run for this case",
                 "advisory": True}
     index = _evidence_index(case, gate)
-    untrusted = frozenset(a["kind"] for a in gate.alerts(("exposure", "paths", "scope")))
+    untrusted = frozenset(a["kind"] for a in gate.alerts(("exposure", "paths", "scope", "financial")))
     out: dict = {"status": "available", "advisory": True,
                  "banner": "Advisory — AI-generated hypotheses, not findings"}
     if report_alert is not None:
@@ -909,7 +940,7 @@ def not_performed_run() -> dict:
 def reports(case: Case, gate: TrustGate, *, refresh: bool = False) -> dict:
     rs = ReportStore(case)
     kinds = {}
-    for kind in REPORT_KINDS:
+    for kind in report_kinds(case):
         if refresh:
             gate.check(kind, refresh=True)
         vs = rs.versions(kind)
@@ -964,3 +995,72 @@ def report_file(case: Case, kind: str, version: str, name: str, gate: TrustGate)
     if not p.is_file() or p.is_symlink():
         return None
     return gate.read_bytes(kind_const, int(m.group(1)), vdir, names[name]), SERVABLE_FILES[names[name]]
+
+
+# ------------------------------------------------------------------------------------------------ financial
+def _money(minor, currency) -> str | None:
+    if minor is None or not currency:
+        return None
+    from tripline_scope.paths.parsers.finapp import CURRENCY_EXPONENT
+
+    exp = CURRENCY_EXPONENT.get(currency, 2)
+    return f"{currency} {minor / 10 ** exp:,.{exp}f}" if exp else f"{currency} {minor:,}"
+
+
+def financial_view(body: dict) -> dict:
+    """Enterprise profile: the released financial report as shown in the workbench. Account labels are not shown
+    (pseudonymous refs only); the report holds no credentials, bank details or raw references."""
+    c = body.get("counts") or {}
+    sus_amounts = [{"category": cat, "currency": cur, "amount_minor": v, "display": _money(v, cur)}
+                   for cat, by in sorted((c.get("suspicious_amount_totals_minor_by_category") or {}).items())
+                   for cur, v in sorted(by.items())]
+    sessions = sorted(body.get("sessions") or [], key=lambda s: (not s.get("suspicious_reasons"), not s.get("transactions"),
+                                                                 s.get("first_event_utc") or ""))
+    txs = sorted(body.get("transactions") or [], key=lambda t: (not t.get("suspicious"), t.get("transaction_id") or ""))
+    return {
+        "financial_impact": body.get("financial_impact") or {},
+        "counts": {k: quantity(c.get(k)) for k in ("sessions", "suspicious_sessions", "transactions",
+                                                    "suspicious_transactions", "linked_to_privileged_sessions",
+                                                    "rejected_or_stopped", "release_attempts_blocked", "posted",
+                                                    "settled_corroborated", "unresolved", "privilege_events")},
+        "by_category": c.get("by_category") or {},
+        "suspicious_amounts": sus_amounts,
+        "sessions": [{"session_id": s.get("session_id"), "account_ref": s.get("account_ref"),
+                      "account_type": s.get("account_type"), "first_event_utc": s.get("first_event_utc"),
+                      "last_event_utc": s.get("last_event_utc"), "events": s.get("events"),
+                      "links": {k: {"label": v.get("label"), "reason": v.get("reason")}
+                                for k, v in (s.get("links") or {}).items()},
+                      "suspicious_reasons": s.get("suspicious_reasons") or [], "transactions": s.get("transactions") or [],
+                      "anomalies": s.get("anomalies") or []} for s in sessions[:200]],
+        "sessions_total": len(sessions),
+        "privilege_events": [{k: p.get(k) for k in ("pev_id", "kind", "account_ref", "host", "ts", "resolved")}
+                             for p in body.get("privilege_events") or []][:200],
+        "transactions": [{"transaction_id": t.get("transaction_id"), "category": t.get("category"),
+                          "evidence_state": t.get("evidence_state"), "amount": _money(t.get("amount_minor"), t.get("currency"))
+                          or not_determinable("amount or currency not recorded"),
+                          "suspicious": bool(t.get("suspicious")), "approval_indicators": t.get("approval_indicators") or [],
+                          "suspicious_session_reasons": t.get("suspicious_session_reasons") or [],
+                          "independent_settlement": bool(t.get("settlement")),
+                          "contradictions": len(t.get("contradictions") or []), "missing": len(t.get("missing") or []),
+                          "flags": t.get("flags") or [], "sessions": t.get("sessions") or []} for t in txs[:300]],
+        "transactions_total": len(txs),
+        "gaps": [{k: g.get(k) for k in ("gap_id", "kind", "source_id", "description", "start", "end")}
+                 for g in body.get("gaps") or []],
+        "exposure": (body.get("credential_and_privilege_exposure") or {}),
+        "containment": body.get("containment") or {},
+        "evidence_rule": body.get("evidence_rule") or [],
+        "limitations": body.get("limitations") or [],
+    }
+
+
+def financial(case: Case, gate: TrustGate) -> dict:
+    if case.profile != "enterprise":
+        return not_applicable("the financial investigation is part of the enterprise profile")
+    try:
+        r = released(case, "financial", gate)
+    except IntegrityFailure as exc:
+        return gate.failure("financial", exc)
+    if r is None:
+        return awaiting("no released financial report (enterprise profile)")
+    n, _vdir, body = r
+    return {"status": "released", "report_version": n, **financial_view(body)}

@@ -34,6 +34,7 @@ from .datacopies import (
     profile_sql_dump,
     profile_xlsx,
 )
+from .enterprise import analyse_enterprise
 from .filetypes import decode_text, ext_of, sniff, text_kind
 from .identity import Identity, analyse_identity
 from .manifest import Manifest, config_sha256, load_manifest
@@ -110,6 +111,9 @@ def register_inputs(ctx, m: Manifest) -> dict[str, dict]:
                          f"metadata-only login {d.id} ({d.engine})", {"live_metadata": live, "engine": d.engine}))
     for key, p in sorted(m.identity.items()):
         plan.append((f"identity:{key}", "directory_export", p, "reference_data", f"identity input {key}", None))
+    if m.enterprise is not None:
+        for key, p in sorted(m.enterprise.inputs.items()):
+            plan.append((f"enterprise:{key}", "directory_export", p, "reference_data", f"enterprise input {key}", None))
     for unit, kind, path, role, label, extra in plan:
         rec = None
         if path is not None:
@@ -361,6 +365,8 @@ def run_scan(ctx, manifest_path: Path | str) -> dict:
     state = ScanState(m, keys, rec)
     sources = register_inputs(ctx, m)
     state.source_for = {u: s["source_id"] for u, s in sources.items()}
+    state.input_sha256 = {u: (s["files"][0].get("tree_sha256") or s["files"][0].get("sha256"))
+                          for u, s in sources.items() if s.get("files")}
     custody.protect_case_sources(ctx.case)
     cfg_sha = config_sha256(m, DETECTOR_CONFIG)
     ctx.input("manifest", m.sha256)
@@ -410,6 +416,7 @@ def run_scan(ctx, manifest_path: Path | str) -> dict:
                 err = f"catalogue could not be read ({type(exc).__name__})"
             analyse_database(state, db, cat, ident, err)
         analyse_identity(state, ident)
+        analyse_enterprise(state)
         cross_link(state)
     if not m.roots:
         for c in FILE_CONTROLS:
@@ -449,6 +456,8 @@ def run_scan(ctx, manifest_path: Path | str) -> dict:
             "identity_inputs": sorted(m.identity), "exclusions": m.exclusions, "assets_sha256": m.assets_sha256,
             "accepted_risks_sha256": m.accepted_risks_sha256, "patient_data_assets": sorted(m.patient_data_assets),
             "suppress_test_fixtures": m.suppress_test_fixtures,
+            **({"enterprise": {"financial_assets": m.enterprise.financial_assets,
+                               "inputs": sorted(m.enterprise.inputs)}} if m.enterprise is not None else {}),
         },
         "accepted_risks": m.accepted_risks,
         "sources": [{"unit": u, "source_id": s["source_id"], "kind": s["kind"], "label": s["label"],

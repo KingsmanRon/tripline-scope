@@ -33,6 +33,10 @@ CASE_SCHEMA = "tripline.case/v1"
 CASE_ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9\-]{2,40}$")
 SUBDIRS = ("sources", "work", "review", "reports", "notify")
 MODES = ("incident", "readiness")
+# Investigation profiles. ``healthcare`` (the default, and the only profile before the enterprise release) is
+# implied when case.yaml has no ``profile`` key, so existing cases are unchanged. ``enterprise`` adds privileged-
+# account, supplier-access and financial-transaction investigation (docs/ENTERPRISE_PROFILE.md).
+PROFILES = ("healthcare", "enterprise")
 
 
 class Case:
@@ -62,12 +66,15 @@ class Case:
         approvers: list[str],
         retain_reports_until: str | None = None,
         title: str = "",
+        profile: str = "healthcare",
     ) -> Case:
         root = Path(root)
         if not CASE_ID_RE.match(case_id):
             raise ConfigError("case id must be 3-41 chars of A-Z, 0-9 and '-' (no patient identifiers)")
         if mode not in MODES:
             raise ConfigError(f"mode must be one of {MODES}")
+        if profile not in PROFILES:
+            raise ConfigError(f"profile must be one of {PROFILES}")
         if mode == "incident" and not (incident_start and incident_end):
             raise ConfigError("incident mode needs --incident-start and --incident-end")
         if incident_start and incident_end and parse_utc(incident_end) < parse_utc(incident_start):
@@ -112,6 +119,8 @@ class Case:
             "column_overrides": {},
             "relations": [],
         }
+        if profile != "healthcare":
+            cfg["profile"] = profile
         (root / "case.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
         (root / "state.json").write_bytes(canonical_bytes({"status": "open", "closed_at": None}))
         return cls(root)
@@ -124,6 +133,13 @@ class Case:
     @property
     def mode(self) -> str:
         return self.config["mode"]
+
+    @property
+    def profile(self) -> str:
+        p = self.config.get("profile", "healthcare")
+        if p not in PROFILES:
+            raise ConfigError(f"unknown case profile {p!r}")
+        return p
 
     def save(self) -> None:
         tmp = self.root / "case.yaml.tmp"
