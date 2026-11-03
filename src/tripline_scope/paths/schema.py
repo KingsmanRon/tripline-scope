@@ -17,8 +17,11 @@ ANALYSIS_SCHEMA = "tripline.paths-analysis/v1"
 
 FAMILIES = (
     "mssql_audit", "pg_log", "pgaudit", "iis", "apache", "nginx", "win_security", "entra_signin",
-    "vpn", "firewall", "proxy", "indicators", "generic",
+    "vpn", "firewall", "proxy", "indicators", "generic", "fin_app_audit", "bank_settlement",
 )
+# Enterprise profile: financial-application audit trail and independent settlement statements (parsers/finapp.py).
+# Module B's path engine does not build units from them; the enterprise transaction analysis reads them.
+FINANCIAL_FAMILIES = ("fin_app_audit", "bank_settlement")
 DB_FAMILIES = ("mssql_audit", "pg_log", "pgaudit")
 WEB_FAMILIES = ("iis", "apache", "nginx")
 FLOW_FAMILIES = ("firewall", "proxy")
@@ -90,6 +93,13 @@ EVENT_SCHEMA = pa.schema([
     ("statement_fp", pa.string()),        # keyed fingerprint of the normalised statement (no literals)
     ("file_hash", pa.string()),
     ("flags", pa.list_(pa.string())),
+    # ---- additive columns for the financial families (null for every other family; never in the paths timeline)
+    ("txn_ref", pa.string()),             # transaction reference as recorded (encrypted work data only)
+    ("approval_ref", pa.string()),        # approval/workflow reference as recorded
+    ("evidence_ref", pa.string()),        # evidence_source_id: the export the record came from
+    ("amount_minor", pa.int64()),         # amount in ISO 4217 minor units
+    ("currency", pa.string()),            # ISO 4217 code
+    ("counterparty_ref", pa.string()),    # keyed fingerprint of the payee/counterparty reference (CPTY-...)
 ])
 
 FIELD_NAMES = [f.name for f in EVENT_SCHEMA]

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from . import entra, generic, indicators, mssql, postgres, web, windows
+from . import entra, finapp, generic, indicators, mssql, postgres, web, windows
 
 REGISTRY = {
     "mssql_audit": mssql,
@@ -18,6 +18,8 @@ REGISTRY = {
     "proxy": generic,
     "generic": generic,
     "indicators": indicators,
+    "fin_app_audit": finapp,
+    "bank_settlement": finapp,
 }
 
 

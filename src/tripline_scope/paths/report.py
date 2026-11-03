@@ -135,7 +135,8 @@ def _content(case, a, analysis_sha, cfg, disp, cont, measures, tl_meta) -> dict:
                         "first_event_utc": c.get("first_event_utc"), "last_event_utc": c.get("last_event_utc"),
                         "events_without_resolvable_time": c.get("events_without_resolvable_time"),
                         "declared_coverage": c.get("declared_coverage"), "time_zone": c.get("zone"),
-                        "completeness": c.get("completeness"), "completeness_problems": c.get("completeness_problems")})
+                        "completeness": c.get("completeness"), "completeness_problems": c.get("completeness_problems"),
+                        "events_file_sha256": c.get("events_file_sha256")})
     return {
         "report_status": "preliminary",
         "title": "Access-path analysis (Module B)",

@@ -250,6 +250,44 @@ go in the register with owner, reason and expiry.
 Readiness retention: `tscope exposure purge` removes working files; released reports keep findings, counts, source
 fingerprints and configuration. Case closure (core) destroys the case key, making keyed fingerprints unlinkable.
 
+## Enterprise profile controls E1–E5
+
+When the manifest declares an `enterprise:` block, the scan also evaluates five financial-system controls and the
+report lists them beside A1–A5. Without the block, healthcare scans and reports are unchanged.
+
+```
+enterprise:
+  financial_assets: [AST-FIN-APP01, AST-FIN-DB01]   # must be in the asset map
+  entitlements: enterprise/entitlements.csv          # account, asset, role, privilege, account_type
+  role_mappings: enterprise/role_mappings.csv        # account, asset, role, approved_by, approved_on
+  operational_requirements: enterprise/operational_requirements.csv   # account, asset, max_privilege, justification
+  data_inventory: enterprise/data_inventory.csv      # root, path_prefix, purpose, owner
+  audit_coverage: enterprise/audit_coverage.csv      # asset, operation, audited (yes|no|unknown), evidence
+  supplier_access: enterprise/supplier_access.csv    # account, supplier, window_start, window_end, enabled, last_sign_in
+```
+
+| Control | Rule ids | Needs |
+|---|---|---|
+| E1 privileged financial-system access without an approved role mapping | `E1.privileged-unmapped` | entitlements + role_mappings |
+| E2 service/supplier privileges above the declared requirement | `E2.exceeds-requirement`, `E2.requirement-undeclared` | entitlements + operational_requirements |
+| E3 financial copies or backups outside the approved inventory | `E3.copy-outside-inventory` (cross-linked to the A3 finding) | data_inventory + snapshot roots |
+| E4 missing audit coverage for privileged financial operations | `E4.audit-not-enabled` (only an explicit `no`) | audit_coverage |
+| E5 supplier access enabled beyond its authorised window | `E5.supplier-window-exceeded` | supplier_access |
+
+Behaviour:
+- A missing input makes the control *not assessed* with the reason "insufficient evidence: … not supplied".
+- An `unknown` or missing audit-coverage row is not assessed, never failed.
+- Each E finding carries the hashes of the inputs it came from (`details.source_sha256`), its custody source ids and
+  evidence ids.
+- New fix codes:
+  - `map-or-remove-privileged-access`
+  - `align-privileges-to-requirement`
+  - `inventory-or-remove-financial-copy`
+  - `audit-privileged-financial-operations`
+  - `end-supplier-access-window`
+
+See [ENTERPRISE_PROFILE.md](ENTERPRISE_PROFILE.md).
+
 ## Measured performance (synthetic, 4-core shared host; no guarantee)
 
 | Tree | Files | Input | Scan command | Files/s | MB/s | Peak RSS | Parser failures |

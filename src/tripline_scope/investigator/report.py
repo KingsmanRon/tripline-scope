@@ -19,7 +19,7 @@ from tripline_scope.core.errors import IntegrityError, NotReady
 from tripline_scope.core.reports import ReportStore
 
 from . import storage as S
-from .bundle import MODULE_KINDS
+from .bundle import kinds_for
 from .schema import CONFIDENCE_MEANING
 
 REPORT_SCHEMA = "tripline.investigation-report/v1"
@@ -47,7 +47,7 @@ LIMITATIONS = [
 def current_refs(case) -> list[dict]:
     rs = ReportStore(case)
     out = []
-    for kind in MODULE_KINDS:
+    for kind in kinds_for(case):
         latest = rs.latest(kind)
         if latest:
             out.append({"kind": kind, "version": latest[0], "report_sha256": latest[2]})
@@ -96,13 +96,25 @@ def deterministic_findings(bundle: dict) -> dict:
         }
     else:
         out["paths"] = {"status": "not assessed"}
+    enterprise = "financial" in refs or "financial" in bundle.get("not_assessed", [])
+    if "financial" in refs:
+        out["financial"] = {
+            "report_version": refs["financial"]["version"],
+            "impact_status": bundle["facts"].get("FACT-F-impact-status", {}).get("value"),
+            "counts": _facts(bundle, "FACT-F-count-"), "transactions_by_category": _facts(bundle, "FACT-F-category-"),
+            "suspicious_totals_by_category_and_currency": _facts(bundle, "FACT-F-suspicious-total-"),
+            "settled_corroborated_transactions": sorted(i["id"] for i in E.values() if i["type"] == "transaction"
+                                                        and i.get("financial_category") == "settled_corroborated"),
+        }
+    elif enterprise:
+        out["financial"] = {"status": "not assessed"}
     if "scope" in refs:
         tiers = _facts(bundle, "FACT-C-tier-")
         out["scope"] = {"report_version": refs["scope"]["version"], "report_status": bundle["facts"].get("FACT-C-report-status", {}).get("value"),
                         "scope_tiers": tiers, "preliminary_estimate": _facts(bundle, "FACT-C-preliminary-"),
                         "person_count_bounds": _facts(bundle, "FACT-C-people-"),
                         "unresolvable_rows": bundle["facts"].get("FACT-C-unresolvable-rows", {}).get("value")}
-    else:
+    elif not enterprise:
         out["scope"] = {"status": "not assessed"}
     return out
 

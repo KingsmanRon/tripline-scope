@@ -21,8 +21,14 @@ from tripline_scope.core.redact import scrub_text
 from tripline_scope.core.reports import ReportStore
 
 SCHEMA = "tripline.investigation-bundle/v1"
-MODULE_KINDS = ("exposure", "paths", "scope")
-MODULE = {"exposure": "A", "paths": "B", "scope": "C"}
+MODULE_KINDS = ("exposure", "paths", "scope")                    # healthcare profile (unchanged)
+ENTERPRISE_KINDS = ("exposure", "paths", "financial")             # enterprise profile
+MODULE = {"exposure": "A", "paths": "B", "scope": "C", "financial": "F"}
+
+
+def kinds_for(case) -> tuple[str, ...]:
+    """The released module reports an investigation of this case reads (by case profile)."""
+    return ENTERPRISE_KINDS if getattr(case, "profile", "healthcare") == "enterprise" else MODULE_KINDS
 MAX_ITEMS = 400
 MAX_FACTS = 200
 MAX_TEXT = 300
@@ -37,6 +43,14 @@ KNOWN_FAMILIES = {
     "firewall flows": {"firewall"},
     "web proxy": {"proxy"},
     "web server": {"iis", "apache", "nginx"},
+}
+ENTERPRISE_FAMILIES = {
+    "identity provider sign-ins": {"entra_signin"},
+    "VPN sessions": {"vpn"},
+    "Windows security events": {"win_security"},
+    "database audit": {"mssql_audit", "pgaudit"},
+    "financial application audit": {"fin_app_audit"},
+    "independent settlement records": {"bank_settlement"},
 }
 # the only Module B counts an exfiltration claim backed by a Module B item may quote
 _B_EXFIL_FACTS = ["fact:FACT-B-confirmed_exfiltration-tables", "fact:FACT-B-sensitive_tables_by_class-exfiltration_evidenced"]
@@ -76,7 +90,8 @@ class _Builder:
         rec = {"id": str(iid)[:64], "module": MODULE[kind], "report": {"kind": kind, "version": version}, "type": typ,
                "basis": None, "consequence_class": None, "statement": None, "severity": None, "assets": [],
                "sources": [], "tables": [], "accounts": [], "time_window": None, "confidence": None,
-               "limitations": [], "exfiltration_evidence_kind": None, "categories": [], "related": []}
+               "limitations": [], "exfiltration_evidence_kind": None, "categories": [], "financial_category": None,
+               "related": []}
         for k, v in fields.items():
             if k not in rec:
                 raise KeyError(k)
@@ -135,7 +150,7 @@ def _exposure(bd: _Builder, body: dict, v: int) -> None:
 
 
 # ------------------------------------------------------------------------------------------------- module B
-def _paths(bd: _Builder, body: dict, v: int) -> list[str]:
+def _paths(bd: _Builder, body: dict, v: int, known_families: dict | None = None) -> list[str]:
     inputs = body.get("inputs") or {}
     host_asset, families = {}, set()
     for s in inputs.get("sources", []):
@@ -222,7 +237,7 @@ def _paths(bd: _Builder, body: dict, v: int) -> list[str]:
         bd.fact(f"FACT-B-{tier}-tables", t.get("tables"), "tables", "paths", v, f"counts.{tier}.tables")
     bd.fact("FACT-B-rows_returned_as_logged", (counts.get("observed_access") or {}).get("rows_returned_as_logged"), "rows",
             "paths", v, "counts.observed_access.rows_returned_as_logged")
-    missing = [name for name, fams in KNOWN_FAMILIES.items() if not (fams & families)]
+    missing = [name for name, fams in (known_families or KNOWN_FAMILIES).items() if not (fams & families)]
     missing += [text(x, 160) for x in (body.get("forensic_handoff") or {}).get("not_covered", [])]
     return missing
 
@@ -273,13 +288,90 @@ def _scope(bd: _Builder, body: dict, v: int) -> None:
     bd.fact("FACT-C-report-status", body.get("report_status"), "status", "scope", v, "report_status")
 
 
+# ------------------------------------------------------------------------------------------------- financial (F)
+def _major(minor, currency):
+    from tripline_scope.paths.parsers.finapp import CURRENCY_EXPONENT
+
+    exp = CURRENCY_EXPONENT.get(currency or "", 2)
+    return minor if exp == 0 else round(minor / 10 ** exp, exp)
+
+
+def _financial(bd: _Builder, body: dict, v: int) -> None:
+    sessions = sorted(body.get("sessions", []), key=lambda s: (not s.get("suspicious_reasons"), not s.get("transactions"),
+                                                               s.get("first_event_utc") or ""))
+    for s in sessions[:60]:
+        lk = s.get("links") or {}
+        bd.item(s.get("session_id"), "financial", v, "fin_session", basis="observation",
+                consequence_class="access_observed",
+                statement=text(f"Financial-application session by {s.get('account_ref')} ({s.get('account_type')}); "
+                               f"identity link {lk.get('identity', {}).get('label')}, remote access "
+                               f"{lk.get('remote_access', {}).get('label')}, host logon "
+                               f"{lk.get('host_logon', {}).get('label')}, privilege {lk.get('privilege', {}).get('label')}; "
+                               "suspicion reasons: " + (", ".join(s.get("suspicious_reasons") or []) or "none")),
+                accounts=[{"account_ref": s.get("account_ref"), "label": text(s.get("account_label"), 80)}],
+                sources=[s.get("source_id")], time_window=_window(s.get("first_event_utc"), s.get("last_event_utc")),
+                related=[f"reason:{r}" for r in s.get("suspicious_reasons") or []] + _ids(s.get("transactions"), 12)
+                + [f"link:{k}:{x.get('label')}" for k, x in sorted(lk.items())]
+                + [e for k, x in sorted(lk.items()) for e in _ids(x.get("evidence"), 3)])
+    txs = sorted(body.get("transactions", []), key=lambda t: (not t.get("suspicious"), t.get("transaction_id") or ""))
+    for t in txs[:120]:
+        amt = (f"{t['currency']} {_major(t['amount_minor'], t['currency'])}" if t.get("amount_minor") is not None
+               and t.get("currency") else "amount unknown")
+        bd.item(t.get("transaction_id"), "financial", v, "transaction", basis="observation",
+                financial_category=t.get("category"),
+                statement=text(f"Transaction {t.get('transaction_id')}: evidence category {t.get('category')}, "
+                               f"evidence state {t.get('evidence_state')}, {amt}; suspicious: {t.get('suspicious')}"),
+                accounts=[{"account_ref": a, "label": None} for a in (t.get("actors") or [])[:4]],
+                limitations=[text(c.get("reason"), 160) for c in (t.get("contradictions") or [])][:3]
+                + [text(m.get("reason"), 160) for m in (t.get("missing") or [])][:3],
+                related=_ids(t.get("sessions"), 6) + [f"indicator:{x}" for x in t.get("approval_indicators") or []]
+                + [f"flag:{x}" for x in t.get("flags") or []]
+                + ([f"settlement:{t['settlement']['record']}"] if t.get("settlement") else [])
+                + [f"reason:{r}" for r in t.get("suspicious_session_reasons") or []])
+        if t.get("suspicious") and t.get("amount_minor") is not None and t.get("currency"):
+            bd.fact(f"FACT-F-amount-{t['transaction_id']}", _major(t["amount_minor"], t["currency"]), t["currency"],
+                    "financial", v, f"transactions[{t['transaction_id']}].amount_minor")
+    for p in body.get("privilege_events", [])[:40]:
+        bd.item(p.get("pev_id"), "financial", v, "privilege_event", basis="observation",
+                statement=text(f"{p.get('kind')} for {p.get('account_ref') or 'an unresolved account'}"
+                               f"{' on ' + p['host'] if p.get('host') else ''}"),
+                accounts=[{"account_ref": p.get("account_ref"), "label": None}] if p.get("account_ref") else [],
+                time_window=_window(p.get("ts"), p.get("ts")), related=_ids([p.get("event")]))
+    for g in body.get("gaps", [])[:40]:
+        bd.item(g.get("gap_id"), "financial", v, "gap", basis="unknown", consequence_class="undetermined",
+                statement=text(g.get("description")), sources=[g.get("source_id")],
+                time_window=_window(g.get("start"), g.get("end")),
+                limitations=["missing or unreadable evidence: outcomes there are not determinable, not absent"],
+                related=[f"kind:{g.get('kind')}"] + _ids(g.get("overlaps_sessions"), 6))
+    for r in (body.get("containment") or {}).get("recommendations", [])[:20]:
+        bd.item(r.get("rec_id"), "financial", v, "recommendation", basis="inference", statement=text(r.get("action")),
+                severity={"immediate": "high", "next": "medium"}.get(r.get("priority"), "low"),
+                related=_ids(r.get("evidence_ids"), 12))
+    c = body.get("counts") or {}
+    for k in ("transactions", "suspicious_transactions", "linked_to_sessions_with_privilege_evidence",
+              "rejected_or_stopped", "ledger_posting_verified", "settled_corroborated",
+              "settled_corroborated_without_ledger_posting", "unresolved", "sessions", "suspicious_sessions", "privilege_events",
+              "release_attempts_blocked"):
+        bd.fact(f"FACT-F-count-{k}", c.get(k), "count", "financial", v, f"counts.{k}")
+    for k, n in sorted((c.get("by_category") or {}).items()):
+        bd.fact(f"FACT-F-category-{k}", n, "transactions", "financial", v, f"counts.by_category.{k}")
+    for cat, cur in sorted((c.get("suspicious_amount_totals_minor_by_category") or {}).items()):
+        for ccy, minor in sorted(cur.items()):
+            bd.fact(f"FACT-F-suspicious-total-{cat}-{ccy}", _major(minor, ccy), ccy, "financial", v,
+                    f"counts.suspicious_amount_totals_minor_by_category.{cat}.{ccy}")
+    bd.fact("FACT-F-impact-status", (body.get("financial_impact") or {}).get("status"), "status", "financial", v,
+            "financial_impact.status")
+
+
 def build(case, home) -> dict:
     """Build and return the bundle (``bundle_sha256`` included). Raises IntegrityError if a released chain fails."""
     rs = ReportStore(case)
     bd = _Builder()
     reports, not_assessed, missing_families = [], [], []
-    # items are inserted in priority order (B, then C, then A) so size truncation drops Module A detail first
-    for kind in ("paths", "scope", "exposure"):
+    kinds = kinds_for(case)
+    enterprise = "financial" in kinds
+    # items are inserted in priority order (B, then C or F, then A) so size truncation drops Module A detail first
+    for kind in (("financial", "paths", "exposure") if enterprise else ("paths", "scope", "exposure")):
         latest = rs.latest(kind)
         if latest is None:
             not_assessed.append(kind)
@@ -295,13 +387,15 @@ def build(case, home) -> dict:
         if kind == "exposure":
             _exposure(bd, body, n)
         elif kind == "paths":
-            missing_families = _paths(bd, body, n)
+            missing_families = _paths(bd, body, n, ENTERPRISE_FAMILIES if enterprise else None)
+        elif kind == "financial":
+            _financial(bd, body, n)
         else:
             _scope(bd, body, n)
     if "paths" in not_assessed:
         missing_families = ["access-path logs (Module B not assessed)"]
-    reports.sort(key=lambda r: MODULE_KINDS.index(r["kind"]))
-    not_assessed.sort(key=MODULE_KINDS.index)
+    reports.sort(key=lambda r: kinds.index(r["kind"]))
+    not_assessed.sort(key=kinds.index)
     items = list(bd.items.values())
     if len(items) > MAX_ITEMS:
         bd.dropped["items"] = len(items) - MAX_ITEMS

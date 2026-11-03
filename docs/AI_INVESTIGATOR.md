@@ -104,6 +104,35 @@ never logged, shown, reported or put into error messages; diagnostics are item i
 over the alternatives; `moderate` = better supported than the alternatives by the cited evidence; `high` = supported
 by cited observations with no cited contradicting evidence. They are never converted to numbers.
 
+### Enterprise profile (financial claims)
+
+For cases with `profile: enterprise` the bundle reads the released `exposure`, `paths` and **`financial`** reports
+(not Module C). It adds these items:
+
+| Item | Type |
+|---|---|
+| `FSN-` | session |
+| `TXN-` | transaction (with `financial_category`) |
+| `PEV-` | privilege event |
+| `FGP-` | gap |
+| `FREC-` | advisory |
+
+It also adds `FACT-F-*` quantities: counts, categories, suspicious totals per category and currency, and the impact
+status. The validator (`investigator-validator/1.2.0`) adds `financial_unsupported`:
+
+- **Fraud and blame are rejected.** Text asserting proven fraud, an offence, guilt, or a named perpetrator is
+  rejected. Tripline never establishes fraud or a person's responsibility. Hedged text ("whether fraud was committed
+  cannot be determined") is accepted.
+- **Money movement and loss need independent settlement.** Text asserting that funds moved, were paid out, settled
+  or lost is accepted only when the sentence names the transaction(s) it is about, and each of them is cited and
+  `settled_corroborated`. A loss claim for an attempted or stopped payment is therefore always rejected.
+- **No-activity claims while gaps exist are rejected.** "No suspicious/unauthorised activity or transactions
+  occurred" while gaps exist is `missing_logs_as_absence`.
+
+The deterministic fixture has an enterprise branch:
+- its main hypothesis about the most suspicious session names settlement only for corroborated transactions;
+- it remains labelled *not AI inference*.
+
 ## 5. Providers and permissions
 
 | Provider | Status in this release | Network |

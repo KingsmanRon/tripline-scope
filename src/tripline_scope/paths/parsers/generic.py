@@ -42,7 +42,10 @@ VERSION = "1.0"
 _TARGETS = (set(FIELD_NAMES) - {"event_id", "source_id", "source_family", "ordinal", "ts_original_text",
                                  "tz_original", "ts_utc", "clock_offset_s", "ts_uncertainty_s", "time_precision",
                                  "parser", "raw_sha256", "consequence_class", "record_locator", "tz_basis",
-                                 "ts_utc_min", "ts_utc_max", "objects", "flags", "statement_fp"}) | {"ts", "url"}
+                                 "ts_utc_min", "ts_utc_max", "objects", "flags", "statement_fp",
+                                 # financial columns are written only by the validating finapp adapter
+                                 "txn_ref", "approval_ref", "evidence_ref", "amount_minor", "currency",
+                                 "counterparty_ref"}) | {"ts", "url"}
 _INT_TARGETS = {"rows", "bytes", "bytes_received", "http_status", "dest_port"}
 _IP_TARGETS = {"remote_ip", "dest_ip", "assigned_ip"}
 _KV = re.compile(r'([A-Za-z_][\w.\-]*)=("(?:[^"\\]|\\.)*"|\S*)')

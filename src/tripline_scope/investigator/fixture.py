@@ -37,6 +37,8 @@ def candidate(bundle: dict) -> dict:
     by_type: dict[str, list[dict]] = {}
     for it in E.values():
         by_type.setdefault(it["type"], []).append(it)
+    if by_type.get("fin_session"):
+        return _enterprise(bundle, by_type)
     paths = sorted(by_type.get("path", []), key=lambda i: (-_rank(i["consequence_class"]), i["id"]))
     gaps = sorted(by_type.get("gap", []), key=lambda i: i["id"])[:4]
     findings = sorted(by_type.get("finding", []), key=lambda i: (["critical", "high", "medium", "low", "info"].index(
@@ -187,6 +189,94 @@ def candidate(bundle: dict) -> dict:
         "hypotheses": hyps, "missing_evidence": missing, "investigation_steps": steps, "remediation": rem,
         "unproven_assertions": unproven,
     }
+
+
+_REASON_TEXT = {"supplier_outside_window": "supplier account outside its authorised window",
+                "privilege_granted_before_session": "privileged access granted shortly before the session",
+                "signin_without_mfa": "sign-in without MFA evidence", "external_signin": "sign-in from outside the network",
+                "module_b_anomaly": "access-path anomaly for the account"}
+
+
+def _enterprise(bundle: dict, by_type: dict) -> dict:
+    """Enterprise profile: one hypothesis about the most suspicious financial-application session, kept to the
+    evidence categories Tripline recorded (settlement is named only where an independent record corroborates it)."""
+    E = bundle["evidence"]
+    sess = sorted(by_type["fin_session"], key=lambda i: (not any(r.startswith("reason:") for r in i["related"]), i["id"]))
+    top = sess[0]
+    reasons = [r[7:] for r in top["related"] if r.startswith("reason:")]
+    links = dict(r[5:].split(":", 1) for r in top["related"] if r.startswith("link:"))
+    acct = (top.get("accounts") or [{}])[0].get("account_ref") or "an account"
+    txs = [E[r] for r in top["related"] if r in E and E[r]["type"] == "transaction"]
+    pev = [i["id"] for i in by_type.get("privilege_event", []) if any(a.get("account_ref") == acct for a in i["accounts"])]
+    gaps = sorted(i["id"] for i in by_type.get("gap", []))[:4]
+    cat = {}
+    for t in txs:
+        cat.setdefault(t["financial_category"], []).append(t["id"])
+    stmt = (f"The account {acct} used the financial application in session {top['id']} ("
+            + ("; ".join(_REASON_TEXT.get(r, r) for r in reasons) or "no suspicion reason recorded") + "); its identity "
+            f"link is {links.get('identity', 'unresolved')}, remote access {links.get('remote_access', 'unresolved')} "
+            f"and privilege {links.get('privilege', 'none_observed')}.")
+    if cat.get("settled_corroborated"):
+        ids = cat["settled_corroborated"]
+        stmt += f" Independent settlement records show that {', '.join(ids)} {'was' if len(ids) == 1 else 'were'} settled."
+    posted = cat.get("posted", []) + cat.get("released_not_posted", [])
+    if posted:
+        stmt += (f" For {', '.join(posted)} the evidence reaches release or ledger posting without an independent "
+                 "settlement record, so movement of funds is not established.")
+    if cat.get("rejected_or_stopped"):
+        stmt += f" The payment attempt {', '.join(cat['rejected_or_stopped'])} was rejected or stopped and no release is recorded."
+    if not txs:
+        stmt += " No transaction is linked to this session in the supplied evidence; financial impact is not determinable."
+    support = [top["id"], *pev, *[t["id"] for t in txs]]
+    hyps = [{
+        "hypothesis_id": "H1", "rank": "main", "statement": stmt, "basis": "hypothesis",
+        "consequence_class": "access_observed", "supporting_evidence": support, "contradicting_evidence": gaps,
+        "assets": [], "sources": top["sources"][:5], "time_window": top.get("time_window"), "confidence": "moderate",
+        "confidence_rationale": "The application records the session directly; the identity, remote-access and privilege "
+                                "links carry the labels shown, and the cited gaps limit what can be concluded.",
+        "alternative_explanations": ["The session was authorised support work and the transactions were legitimate "
+                                     "business payments.", "Another person used the account's credentials."],
+        "tests": [{"evidence_needed": "Change and approval records for the supplier's access and the payment approvals",
+                   "would_resolve": "whether the activity was authorised"},
+                  {"evidence_needed": "Payment status confirmed directly by the paying bank",
+                   "would_resolve": "which payments actually moved funds"}],
+        "cannot_conclude": ["Who operated the account beyond the logged identity",
+                            "Whether any person committed an offence; that is for the responsible officers and the "
+                            "authorities", "Whether any loss arose for transactions without independent settlement records"],
+        "quantities": []}]
+    hyps.append({
+        "hypothesis_id": "H2", "rank": "alternative",
+        "statement": f"The session {top['id']} was authorised support work by the account {acct} and its transactions were "
+                     "legitimate; the evidence contains no change record for that access.",
+        "basis": "hypothesis", "consequence_class": "access_observed", "supporting_evidence": [top["id"]],
+        "contradicting_evidence": pev[:4] or gaps[:1], "assets": [], "sources": top["sources"][:5],
+        "time_window": top.get("time_window"), "confidence": "low",
+        "confidence_rationale": "No change or approval record for the access is in the evidence.",
+        "alternative_explanations": ["Unauthorised use as in the main hypothesis."],
+        "tests": [{"evidence_needed": "The supplier contract owner's change records", "would_resolve": "authorisation"}],
+        "cannot_conclude": ["Whether the access had a business purpose"], "quantities": []})
+    missing = [{"description": f"Evidence recorded as missing in {g}: outcomes there are undetermined.",
+                "source_family": (_rel(E[g], "kind:") or ["kind:unknown"])[0][5:], "related_evidence": [g]} for g in gaps]
+    missing += [{"description": f"Not supplied: {f}.", "source_family": f, "related_evidence": []}
+                for f in bundle.get("missing_source_families", [])[:6]]
+    steps = [{"step": f"Obtain change and approval records for the access in session {top['id']} from the contract owner.",
+              "priority": "immediate", "evidence_ids": [top["id"]]}]
+    for t in txs:
+        if t["financial_category"] in ("settled_corroborated", "posted", "released_not_posted", "approved_not_released"):
+            steps.append({"step": f"Confirm the status of {t['id']} directly with the paying bank.", "priority": "immediate",
+                          "evidence_ids": [t["id"]]})
+    for g in gaps:
+        steps.append({"step": f"Recover the missing records described in {g}.", "priority": "next", "evidence_ids": [g]})
+    rem = [{"action": r["statement"], "priority": PRIO.get(r["severity"], "next"), "evidence_ids": [r["id"]],
+            "asset_ids": r["assets"]} for r in sorted(by_type.get("recommendation", []), key=lambda r: r["id"])[:8]]
+    unproven = ["That any named person committed fraud or an offence.",
+                "That funds moved for transactions without independent settlement records."]
+    return {"schema": CANDIDATE_SCHEMA, "case_id": bundle["case_id"], "bundle_sha256": bundle["bundle_sha256"],
+            "summary": "Deterministic fixture analysis (not AI inference) of the released enterprise reports: one main "
+                       "hypothesis and an alternative about the suspicious financial-application session, kept to "
+                       "Tripline's evidence categories, with missing evidence, next steps and advisory remediation.",
+            "hypotheses": hyps, "missing_evidence": missing, "investigation_steps": steps, "remediation": rem,
+            "unproven_assertions": unproven}
 
 
 def output(bundle: dict) -> bytes:

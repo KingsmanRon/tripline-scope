@@ -24,7 +24,7 @@ from tripline_scope.core.errors import NotReady
 from tripline_scope.core.reports import ReportStore
 
 from . import METHOD_VERSION, REPORT_SCHEMA_VARIANT
-from .model import CONTROLS, SEVERITIES, Keys, rank_key
+from .model import ALL_CONTROLS, SEVERITIES, Keys, controls_for, rank_key
 from .scan import FINDINGS_FILE, SCAN_FILE
 
 STATEMENT = ("Configuration and data-exposure assessment of hospital-authorised, read-only snapshots and exports. "
@@ -130,9 +130,9 @@ def assign_states(findings: list[dict], prev: dict | None, scan: dict, keys: Key
     return out
 
 
-def control_coverage(cov: dict) -> dict:
+def control_coverage(cov: dict, enterprise: bool = False) -> dict:
     out = {}
-    for c, name in CONTROLS.items():
+    for c, name in controls_for(enterprise).items():
         assessed = cov["assessed"].get(c, [])
         na = [{k: x[k] for k in ("unit", "location", "reason")} for x in cov["not_assessed"] if c in x["controls"]]
         un = [{k: x[k] for k in ("unit", "location", "reason")} for x in cov["unavailable"] if c in x["controls"]]
@@ -159,6 +159,8 @@ def _size(n: int) -> str:
 
 def build_body(rs: ReportStore, scan: dict, findings: list[dict], prev: dict | None, prev_meta) -> dict:
     sm = scan["manifest"]
+    ent = "enterprise" in sm
+    ctls = controls_for(ent)
     active = [f for f in findings if f["state"] in ("new", "open", "accepted-risk")]
     by_sev = {s: sum(1 for f in active if f["severity"] == s) for s in SEVERITIES}
     by_state: dict[str, int] = {}
@@ -182,17 +184,18 @@ def build_body(rs: ReportStore, scan: dict, findings: list[dict], prev: dict | N
             "roots": sm["roots"], "databases": sm["databases"], "identity_inputs": sm["identity_inputs"],
             "assets_sha256": sm["assets_sha256"], "accepted_risks_sha256": sm["accepted_risks_sha256"],
             "patient_data_assets": sm["patient_data_assets"], "suppress_test_fixtures": sm["suppress_test_fixtures"],
+            **({"enterprise": sm["enterprise"]} if ent else {}),
         },
         sources=scan["sources"],
         previous_report={"version": prev_meta[0], "report_sha256": prev_meta[2]} if prev_meta else None,
         summary={
             "findings": len(active), "by_severity": by_sev,
-            "by_control": {c: sum(1 for f in active if f["control_id"] == c) for c in CONTROLS},
+            "by_control": {c: sum(1 for f in active if f["control_id"] == c) for c in ctls},
             "by_state": dict(sorted(by_state.items())),
-            "coverage_status": {c: v["status"] for c, v in control_coverage(cov).items()},
+            "coverage_status": {c: v["status"] for c, v in control_coverage(cov, ent).items()},
         },
         findings=findings,
-        coverage=control_coverage(cov),
+        coverage=control_coverage(cov, ent),
         exclusions={
             "declared_patterns": sm["exclusions"] + [f"{r['id']}: {p}" for r in sm["roots"] for p in r.get("exclusions", [])],
             "applied": cov["exclusions"], "counts": cov["exclusion_counts"],
@@ -232,7 +235,7 @@ def render_pdf(body: dict) -> bytes:
     secs = [S("Summary", [
         body["statement"],
         f"Active findings: {s['findings']} (" + ", ".join(f"{k} {v}" for k, v in s["by_severity"].items() if v) + ").",
-        "By control: " + "; ".join(f"{c} {CONTROLS[c]} {n}" for c, n in s["by_control"].items()) + ".",
+        "By control: " + "; ".join(f"{c} {ALL_CONTROLS[c]} {n}" for c, n in s["by_control"].items()) + ".",
         "States: " + ", ".join(f"{k} {v}" for k, v in s["by_state"].items()) + ".",
         "Coverage: " + "; ".join(f"{c} {st}" for c, st in s["coverage_status"].items()) + ".",
     ])]

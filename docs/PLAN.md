@@ -321,3 +321,16 @@ re-render from a frozen result. Dashboard: localhost binding, auth, roles, host/
 arbitrary paths, no identifiers, pagination, unavailable ≠ 0, read-only, counts agree with reports, offline.
 Demo: A from real scanner, B from generated logs, C from generated records, lineage, both scenarios' classes,
 validated references, signatures, dashboard loads, sources unchanged, no leaks, offline.
+
+## 16. Enterprise profile contracts
+
+| Contract | Detail |
+|---|---|
+| Case | `case.yaml` `profile` key, written only when not `healthcare`; `PROFILES = (healthcare, enterprise)`; `tscope case init --profile`. |
+| Module A | `enterprise:` manifest block; controls E1–E5 reported only when declared (`exposure/model.py` `controls_for`). |
+| Module B | Families `fin_app_audit`, `bank_settlement` (`parsers/finapp.py`). Additive event columns `txn_ref, approval_ref, evidence_ref, amount_minor, currency, counterparty_ref`. |
+| Financial investigation | `tscope financial analyse --config financial.yaml` (`tripline.financial-config/v1`) → `work/financial/analysis.json` (`tripline.financial-analysis/v1`). `tscope financial report` → draft kind `financial` (`tripline.financial-report/v1`). Release via `tscope release --kind financial`. The analysis references the released `paths` (and `exposure`) versions; the report refuses a stale analysis. |
+| Investigator | `bundle.kinds_for(case)`: healthcare `(exposure, paths, scope)`; enterprise `(exposure, paths, financial)`. Validator 1.2.0 adds `financial_unsupported`. |
+| Workbench | `dashboard.data.report_kinds(case)`; `/api/financial`; `People → Financial activity` for enterprise. |
+
+The Energy profile is future work and is not implemented.

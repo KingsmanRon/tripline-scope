@@ -79,11 +79,13 @@ def login(user: str) -> None:
     assert rc == 0, err
 
 
-def open_case(base: Path, case_id: str = "CASE-TEST-001", *, mode: str = "incident") -> Path:
+def open_case(base: Path, case_id: str = "CASE-TEST-001", *, mode: str = "incident", profile: str = "healthcare") -> Path:
     login("admin")
     case_dir = base / case_id.lower()
     args = ["case", "init", str(case_dir), "--case-id", case_id, "--mode", mode,
             "--operator", "olivia", "--reviewer", "rami", "--approver", "ines"]
+    if profile != "healthcare":
+        args += ["--profile", profile]
     if mode == "incident":
         args += ["--incident-start", "2026-09-01T00:00:00Z", "--incident-end", "2026-09-14T23:59:59Z"]
     rc, out, err = run_cli(args)

@@ -12,6 +12,11 @@ vendor.
 > Every command below has been run end to end on synthetic data (see `docs/ACCEPTANCE.md`). Check flags with
 > `tscope <command> --help`. Each section says what has been demonstrated and what has not.
 
+> **Enterprise profile.** Cases opened with `tscope case init --profile enterprise` investigate privileged access
+> to an enterprise financial system (financial-application audit, bank settlement evidence, controls E1–E5) and
+> release a signed `financial` report; see [docs/ENTERPRISE_PROFILE.md](docs/ENTERPRISE_PROFILE.md). It has been
+> demonstrated on synthetic data only ([docs/ENTERPRISE_LIMITATIONS.md](docs/ENTERPRISE_LIMITATIONS.md)).
+
 ## 1. Ground rules
 
 * **Patient data stays with you.** There is no telemetry, licence check or update check, ever. The product

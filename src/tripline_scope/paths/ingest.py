@@ -260,8 +260,11 @@ def run_ingest(ctx, manifest_path) -> dict:
                     _check_hash(sid, relname, hr, expected)
                     file_hashes.append({"name": relname, "sha256": expected, "size": hr.size})
                 cols.flush()
-            ctx.output(f"events/{sid}", store.file_sha256(f"work/paths/events/{sid}.parquet"))
+            events_sha = store.file_sha256(f"work/paths/events/{sid}.parquet")
+            ctx.output(f"events/{sid}", events_sha)
             cov = _coverage(spec, sid, pname, cols, pctx, file_hashes)
+            # binds the exact stored (authenticated, encrypted) event set to whatever is later signed over it
+            cov["events_file_sha256"] = events_sha
             summary["events"] += cols.count
             summary["parse_failures"] += pctx.failures
         elapsed = time.perf_counter() - t0

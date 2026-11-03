@@ -53,8 +53,8 @@ CASE_ROLES = ("operator", "reviewer", "approver")
 # Which case roles may open which section. Every section is open to all three case roles; people and
 # investigation are audited on every request.
 SECTION_ROLES = {s: set(CASE_ROLES) for s in
-                 ("overview", "timeline", "paths", "exposure", "people", "investigation", "reports")}
-AUDIT_EVERY_VIEW = {"people", "investigation"}
+                 ("overview", "timeline", "paths", "exposure", "people", "investigation", "reports", "financial")}
+AUDIT_EVERY_VIEW = {"people", "investigation", "financial"}
 AUDIT_ONCE_PER_SESSION = {"timeline", "paths", "exposure"}
 
 BASE_CSP = ("default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; "
@@ -190,7 +190,7 @@ def create_app(case, store, home, *, port: int = DEFAULT_PORT, host: str = DEFAU
             return login_page()
         nonce = secrets.token_urlsafe(16)
         html = P.page_html(nonce=nonce, csrf=s["csrf"], case_id=case.case_id, mode=case.mode, user=s["user"],
-                           roles=s["roles"])
+                           roles=s["roles"], profile=case.profile)
         return HTMLResponse(html, headers={"Content-Security-Policy": f"{BASE_CSP}; script-src 'nonce-{nonce}'"})
 
     @app.post("/login")
@@ -280,6 +280,11 @@ def create_app(case, store, home, *, port: int = DEFAULT_PORT, host: str = DEFAU
     def api_investigation(request: Request):
         s, err = view(request, "investigation")
         return err or ok(D.investigation(case, store, st.gate))
+
+    @app.get("/api/financial")
+    def api_financial(request: Request):
+        s, err = view(request, "financial")
+        return err or ok(D.financial(case, st.gate))
 
     @app.get("/api/reports")
     def api_reports(request: Request):

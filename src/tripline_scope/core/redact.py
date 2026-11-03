@@ -24,7 +24,10 @@ _HASH_TOKEN = re.compile(
     # Tripline's own opaque references: pseudonymous accounts (ACCT- + 10 hex of a keyed fingerprint), Module B
     # ids (paths.util.stable_id: PREFIX- + 12 hex) and keyed directory-member and file refs (dn:…, file:ext:…).
     # Their hex part is all decimal now and then (e.g. ACCT-0821234567) and would otherwise read as a phone number.
-    r"|(?<![0-9A-Za-z])(?:ACCT-[0-9a-f]{10}|(?:ANOM|CLM|E|GAP|IM|PATH|REC)-[0-9a-f]{12}|dn:[0-9a-f]{12}"
+    # Enterprise profile refs (enterprise.financial): sessions, transactions, privilege events, gaps, advisory
+    # items and counterparties, all case-keyed.
+    r"|(?<![0-9A-Za-z])(?:ACCT-[0-9a-f]{10}|(?:ANOM|CLM|E|GAP|IM|PATH|REC|FSN|TXN|PEV|FGP|FREC|CPTY)-[0-9a-f]{12}"
+    r"|dn:[0-9a-f]{12}"
     r"|file:[0-9A-Za-z.\-]{0,16}:[0-9a-f]{16})(?![0-9A-Za-z])")
 
 REDACTED = "[redacted]"

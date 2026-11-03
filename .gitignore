@@ -12,3 +12,4 @@ dist/
 .tscope_session
 /.claude/
 /demo/lab-breach/out/
+/demo/enterprise-financial-incident/out/

@@ -19,8 +19,20 @@ def login_html(token: str, case_id: str, error: str | None = None) -> str:
             .replace("{{error}}", err))
 
 
-def page_html(*, nonce: str, csrf: str, case_id: str, mode: str, user: str, roles: list[str]) -> str:
-    return (PAGE_HTML.replace("{{nonce}}", _e(nonce)).replace("{{csrf}}", _e(csrf)).replace("{{case}}", _e(case_id))
+_PEOPLE_NAV = ' <li><a href="#people" data-section="people"><span class="letter" aria-hidden="true">E</span>People</a></li>'
+_FIN_NAV = (' <li><a href="#financial" data-section="financial"><span class="letter" aria-hidden="true">E</span>'
+            'Financial activity</a></li>')
+_FOOT = "Views of People and AI Investigator are written to the case audit log."
+
+
+def page_html(*, nonce: str, csrf: str, case_id: str, mode: str, user: str, roles: list[str],
+              profile: str = "healthcare") -> str:
+    html = PAGE_HTML
+    if profile == "enterprise":
+        # the enterprise profile has no patient scoping (Module C): the People section becomes Financial activity
+        html = html.replace(_PEOPLE_NAV, _FIN_NAV).replace(
+            _FOOT, "Views of Financial activity and AI Investigator are written to the case audit log.")
+    return (html.replace("{{nonce}}", _e(nonce)).replace("{{csrf}}", _e(csrf)).replace("{{case}}", _e(case_id))
             .replace("{{mode}}", _e(mode)).replace("{{user}}", _e(user)).replace("{{roles}}", _e(", ".join(roles))))
 
 
@@ -215,7 +227,7 @@ function clear(e){ while (e.firstChild) e.removeChild(e.firstChild); }
 
 /* ---------- values, statuses and badges ---------- */
 const STATUS = {not_determinable:"Not determinable", not_assessed:"Not assessed", awaiting_analysis:"Awaiting analysis",
-  not_performed:"Not performed", not_released:"Not released", integrity_failure:"INTEGRITY FAILURE \u2014 not shown"};
+  not_performed:"Not performed", not_released:"Not released", not_applicable:"Not applicable", integrity_failure:"INTEGRITY FAILURE \u2014 not shown"};
 function isStatus(v){ return v && typeof v === "object" && !Array.isArray(v) && typeof v.status === "string" && STATUS[v.status]; }
 function missing(text, reason){
   return h("span", {class:"missing", title: reason || null}, h("span", {"aria-hidden":"true"}, "\\u25cb"), text,
@@ -322,6 +334,7 @@ async function renderOverview(root){
     h("section", {class:"card", "aria-label":"Case"}, h("h3", null, "Case"), kv([
       ["Case id", d.case_id], ["Mode", d.mode], d.title ? ["Title", d.title] : null,
       ["Incident window", isStatus(d.incident_window) ? val(d.incident_window) : when(d.incident_window.start) + " \\u2192 " + when(d.incident_window.end)],
+      ["Profile", d.profile === "enterprise" ? "Enterprise (financial-system investigation)" : "Healthcare"],
       ["Case status", d.case_status === "closed" ? "Closed" : "Open"],
       ["Legal hold", hold.active ? "Active" + (hold.set_at ? " since " + when(hold.set_at) : "") : "Not active"],
       ["Synthetic / real", missing("Not shown", "the workbench does not infer whether data is synthetic; see the case mode")]])),
@@ -700,6 +713,63 @@ function hypCard(hy, links, decision){
   return card;
 }
 
+/* ---------- E (enterprise). Financial activity ---------- */
+const IMPACT = {settlement_corroborated:"Settlement corroborated by an independent record",
+  released_or_posted_not_settled:"Released or posted; settlement not corroborated",
+  initiated_not_released:"Initiated; release not shown", attempted_and_stopped:"Attempted and stopped",
+  not_determinable:"Not determinable", no_suspicious_transaction_in_available_evidence:"No suspicious transaction in the supplied evidence",
+  no_suspicious_session_identified:"No suspicious session identified"};
+const FCAT = {settled_corroborated:"Settled (independent record)", reversed:"Reversed", posted:"Posted (settlement not corroborated)",
+  released_not_posted:"Released, not posted", approved_not_released:"Approved, not released", pending_approval:"Pending approval",
+  initiated:"Initiated", rejected_or_stopped:"Rejected or stopped", undetermined:"Undetermined (contradictory or incomplete)"};
+function linkBadge(l){ return (l && l.label === "none_observed") ? missing("None observed", l.reason) : h("span", {title: l ? l.reason : ""}, edgeBadge(l ? l.label : "unresolved")); }
+async function renderFinancial(root){
+  const d = await api("/api/financial");
+  add(root, heading("E · Financial activity", "From the released financial report (enterprise profile). Evidence categories, not findings of fraud or blame. A payment counts as settled only when an independent settlement record carries the same reference, amount and currency. This view is audited."));
+  if (isStatus(d)) { add(root, val(d)); return; }
+  const imp = d.financial_impact || {};
+  add(root, h("div", {class:"banner info", role:"note"}, h("strong", null, "Financial impact: " + (IMPACT[imp.status] || imp.status || "—")), imp.statement || ""));
+  const c = d.counts || {};
+  add(root, h("div", {class:"grid"},
+    h("section", {class:"card"}, h("h3", null, "Evidence-backed counts"), kv([["Application sessions", c.sessions], ["Suspicious sessions", c.suspicious_sessions],
+      ["Transactions", c.transactions], ["Suspicious transactions", c.suspicious_transactions], ["Linked to sessions with privilege evidence (account and time)", c.linked_to_sessions_with_privilege_evidence],
+      ["Rejected or stopped", c.rejected_or_stopped], ["Release attempts blocked", c.release_attempts_blocked], ["Verified ledger postings", c.ledger_posting_verified],
+      ["Settlement corroborated (independent record)", c.settled_corroborated], ["  of which no ledger posting recorded", c.settled_corroborated_without_ledger_posting], ["Unresolved", c.unresolved]])),
+    h("section", {class:"card"}, h("h3", null, "Suspicious amounts by category"), (d.suspicious_amounts || []).length
+      ? kv(d.suspicious_amounts.map(x => [FCAT[x.category] || x.category, x.display])) : h("p", null, "None recorded."),
+      h("p", {class:"lede"}, "Per currency; never converted or added across currencies."))));
+  add(root, h("h3", null, "Identity and privileged access"));
+  add(root, table(null, [{label:"Session", get: s => h("code", null, s.session_id)}, {label:"Account", get: s => h("code", null, s.account_ref)},
+    {label:"Type", get: s => s.account_type}, {label:"Identity", get: s => linkBadge(s.links.identity)},
+    {label:"Remote access", get: s => linkBadge(s.links.remote_access)}, {label:"Host logon", get: s => linkBadge(s.links.host_logon)},
+    {label:"Privilege", get: s => linkBadge(s.links.privilege)}, {label:"Suspicion reasons", get: s => (s.suspicious_reasons || []).map(r => r.replace(/_/g, " ")).join("; ") || "—"},
+    {label:"Transactions", get: s => chips(s.transactions, null)}], (d.sessions || []).filter(s => s.suspicious_reasons.length || s.transactions.length).slice(0, 60)));
+  add(root, h("p", {class:"lede"}, d.sessions_total + " application session(s) in total; sessions without suspicion reasons or transactions are not listed."));
+  add(root, table("Privilege events (observed)", [{label:"Event", get: p => h("code", null, p.pev_id)}, {label:"Kind", get: p => p.kind.replace(/_/g, " ")},
+    {label:"Account", get: p => p.account_ref || missing("Unresolved", "the record names a member Tripline could not map to an account")},
+    {label:"Host", get: p => p.host || "—"}, {label:"Time", get: p => when(p.ts)}], d.privilege_events || []));
+  add(root, h("h3", null, "Transactions"));
+  add(root, table(null, [{label:"Transaction", get: t => h("code", null, t.transaction_id)},
+    {label:"Evidence category", get: t => FCAT[t.category] || t.category}, {label:"Amount", get: t => t.amount},
+    {label:"Suspicious", get: t => t.suspicious ? h("span", {class:"badge s-high"}, "Suspicious") : "—"},
+    {label:"Approval indicators", get: t => (t.approval_indicators || []).map(r => r.replace(/_/g, " ")).join("; ") || "—"},
+    {label:"Independent settlement", get: t => t.independent_settlement ? "Yes" : "No"},
+    {label:"Contradictions / missing", num:true, get: t => t.contradictions + " / " + t.missing}], (d.transactions || []).slice(0, 100)));
+  add(root, h("h3", null, "Evidence gaps"));
+  add(root, table(null, [{label:"Gap", get: g => h("code", null, g.gap_id)}, {label:"Kind", get: g => g.kind.replace(/_/g, " ")},
+    {label:"Description", get: g => g.description}, {label:"Period", get: g => g.start ? when(g.start) + " \u2192 " + when(g.end) : "—"}], d.gaps || []));
+  const ex = d.exposure || {};
+  add(root, h("h3", null, "Credential and privilege exposure (Module A)"));
+  add(root, h("p", {class:"lede"}, ex.note || ""));
+  add(root, table(null, [{label:"Finding", get: f => h("code", null, f.finding_id)}, {label:"Rule", get: f => f.rule_id}, {label:"Severity", get: f => sevBadge(f.severity)},
+    {label:"Account", get: f => f.account_ref || "—"}, {label:"Seen in financial activity", get: f => f.account_in_financial_activity ? "Yes" : "No"}], ex.findings || []));
+  const cont = d.containment || {};
+  add(root, h("h3", null, "Containment considerations (advisory, not executed)"));
+  add(root, h("p", {class:"lede"}, cont.notice || ""));
+  add(root, table(null, [{label:"Item", get: r => h("code", null, r.rec_id)}, {label:"Priority", get: r => r.priority}, {label:"Action", get: r => r.action}],
+    cont.recommendations || []));
+}
+
 /* ---------- G. Reports ---------- */
 async function renderReports(root, refresh){
   const d = await api("/api/reports" + (refresh ? "?refresh=1" : ""));
@@ -727,7 +797,7 @@ async function renderReports(root, refresh){
 
 /* ---------- routing ---------- */
 const ROUTES = {overview:renderOverview, timeline:renderTimeline, paths:renderPaths, exposure:renderExposure,
-  people:renderPeople, investigation:renderInvestigation, reports:renderReports};
+  people:renderPeople, investigation:renderInvestigation, reports:renderReports, financial:renderFinancial};
 async function route(){
   let sec = (location.hash || "#overview").slice(1);
   if (!ROUTES[sec]) sec = "overview";
