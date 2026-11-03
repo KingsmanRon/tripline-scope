@@ -52,6 +52,7 @@ log & audit exports ────────► tscope paths ingest/analyse/repo
                                      │ (normalised, encrypted events; custody hashes)
 financial.yaml ─────────────► tscope financial analyse ──► tscope financial report ──► release "financial"
                                      │ reads: Module B encrypted events + released, verified "paths" (and "exposure")
+                                     │ refuses unless the events are exactly those the released "paths" was signed over
 released exposure/paths/financial ─► tscope investigator analyse (fixture or local) ─► review ─► release "investigation"
 released reports ──────────► tscope dashboard serve (loopback, read-only, integrity gate)
 every released report ─────► tscope-verify chain (offline, stand-alone)
@@ -119,10 +120,32 @@ Each financial-application session (`FSN-`) carries labels for identity, remote 
 
 | Label | Meaning |
 |---|---|
-| `observed` | Recorded by the system concerned: the session itself, a privilege event. |
-| `direct` | Both records carry the same identifier. The application's `idp_correlation_id` equals a sign-in correlation id, or the VPN `auth_ref` equals the sign-in request id. |
+| `observed` | Recorded by the system concerned: the session itself. Privilege events are observed by the system that recorded them, but their link to a session is by account and time, so the session's `privilege` link is `correlated`. |
+| `direct` | Both records carry the same identifier (the application's `idp_correlation_id` equals a sign-in correlation id, or the VPN `auth_ref` equals the sign-in request id) **and the join validates**: see below. |
 | `correlated` | Same account inside a configured window (`financial.yaml` `correlation`). This is an inference, and it is never upgraded to `direct`. |
-| `unresolved` / `none_observed` | No qualifying record; the reason is given. |
+| `unresolved` / `none_observed` | No qualifying record, or a shared-identifier join that failed validation; the reason is given, and any conflicting records are listed under the link's `conflicts`. |
+
+**Validating a `direct` join.** Every record carrying the shared identifier is considered, not just one:
+- If any of them names a **different account**, the identifier is not unique to this session. The link is
+  `unresolved` and nothing (MFA state, address, VPN chain) is taken from those records.
+- A record qualifies only if it names the session's account, is **not failed** (sign-ins must be `success`; a VPN
+  session-start record carries no outcome field, so `unknown` is accepted there, `failure` never), and is stamped
+  at most the configured window (`signin_to_app_s`, `vpn_to_app_s`) before the session and at most 300 s after it.
+  A VPN session must also not precede the sign-in it names.
+- If no record qualifies, the link is `unresolved`. If several qualify, they must agree on the attributes the
+  analysis uses (sign-in: MFA and address; VPN: public and tunnel address). Otherwise the link is `unresolved`
+  (ambiguous).
+- A same-account failure followed by a qualifying success (an MFA retry) is still `direct`, and the failure is
+  listed.
+
+**Provenance binding.** `tscope financial analyse` reads Module B's stored events only when they are exactly the
+event set described by the latest released, verified `paths` report. For each source it compares presence, family,
+registered files (name, sha256, size), custody manifest hash, coverage (event count, parse failures, time span,
+declared coverage, completeness) and the sha256 of the stored encrypted event file (`events_file_sha256`, recorded
+at ingest and signed in the paths report). It also checks that no event file exists outside the report. Any
+difference, such as a re-ingest or a new source after the paths release, is refused (`IntegrityError`) until paths is
+re-analysed and re-released. The binding (paths report sha256 and per-source event-file hashes) is recorded in the
+signed financial report under `inputs.paths_binding`.
 
 **Suspicion reasons** are documented and deterministic. Each one names its evidence.
 
@@ -160,11 +183,15 @@ the transaction `undetermined`. Contradictions are:
 The released report holds only counts and sums of input records:
 - transactions;
 - suspicious transactions;
-- transactions linked to privileged sessions;
+- transactions linked to sessions with privilege evidence: a transaction acted on in a session whose own
+  `privilege` link found privilege events for that account inside the window (`correlated`, account and time). The
+  same actor holding privileges in some other session does not count;
 - rejected or stopped transactions;
 - blocked release attempts;
-- posted transactions;
-- independently settled transactions;
+- verified ledger postings: transactions with a verified `ledger_posted` transition. There is no combined
+  "posted including settled" figure;
+- independently settled transactions (`settled_corroborated`), and how many of them have no recorded ledger posting
+  (a release followed by an independent settlement is corroborated without implying a posting);
 - unresolved transactions;
 - monetary totals per evidence category **per currency**.
 

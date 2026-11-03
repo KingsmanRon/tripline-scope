@@ -407,7 +407,9 @@ Gaps are never filled. They make tables `not_assessable` and are listed as missi
 **Report.** The `paths` report body holds:
 
 * method version, `config_sha256` and `analysis_sha256`;
-* sources with file hashes and custody manifest hashes, corroborations, indicators accepted/rejected, and
+* sources with file hashes, custody manifest hashes and `events_file_sha256` (the sha256 of the stored, encrypted
+  event file recorded at ingest, which fixes the exact normalised event set the report describes; the enterprise
+  financial analysis refuses to run when the stored events no longer match it), corroborations, indicators accepted/rejected, and
   coverage;
 * the classification summary, per-table outcomes and windows;
 * ranked paths (top `max_paths_detailed`, default 50) with stages, tables and egress;

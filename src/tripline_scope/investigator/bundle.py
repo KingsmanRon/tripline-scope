@@ -348,8 +348,9 @@ def _financial(bd: _Builder, body: dict, v: int) -> None:
                 severity={"immediate": "high", "next": "medium"}.get(r.get("priority"), "low"),
                 related=_ids(r.get("evidence_ids"), 12))
     c = body.get("counts") or {}
-    for k in ("transactions", "suspicious_transactions", "linked_to_privileged_sessions", "rejected_or_stopped",
-              "posted", "settled_corroborated", "unresolved", "sessions", "suspicious_sessions", "privilege_events",
+    for k in ("transactions", "suspicious_transactions", "linked_to_sessions_with_privilege_evidence",
+              "rejected_or_stopped", "ledger_posting_verified", "settled_corroborated",
+              "settled_corroborated_without_ledger_posting", "unresolved", "sessions", "suspicious_sessions", "privilege_events",
               "release_attempts_blocked"):
         bd.fact(f"FACT-F-count-{k}", c.get(k), "count", "financial", v, f"counts.{k}")
     for k, n in sorted((c.get("by_category") or {}).items()):

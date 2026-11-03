@@ -82,7 +82,7 @@ def test_cross_system_correlation_labels(scenarios):
     r = report(scenarios["c"].case_dir, "financial")
     s = next(s for s in r["sessions"] if s["suspicious_reasons"])
     labels = {k: v["label"] for k, v in s["links"].items()}
-    assert labels == {"identity": "direct", "remote_access": "direct", "host_logon": "correlated", "privilege": "observed"}
+    assert labels == {"identity": "direct", "remote_access": "direct", "host_logon": "correlated", "privilege": "correlated"}
     assert set(s["suspicious_reasons"]) >= {"supplier_outside_window", "privilege_granted_before_session",
                                             "signin_without_mfa", "external_signin"}
     assert all(p["resolved"] for p in r["privilege_events"])      # the directory group grant maps to the account

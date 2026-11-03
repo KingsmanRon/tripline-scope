@@ -732,9 +732,9 @@ async function renderFinancial(root){
   const c = d.counts || {};
   add(root, h("div", {class:"grid"},
     h("section", {class:"card"}, h("h3", null, "Evidence-backed counts"), kv([["Application sessions", c.sessions], ["Suspicious sessions", c.suspicious_sessions],
-      ["Transactions", c.transactions], ["Suspicious transactions", c.suspicious_transactions], ["Linked to privileged sessions", c.linked_to_privileged_sessions],
-      ["Rejected or stopped", c.rejected_or_stopped], ["Release attempts blocked", c.release_attempts_blocked], ["Posted (incl. settled)", c.posted],
-      ["Settlement corroborated", c.settled_corroborated], ["Unresolved", c.unresolved]])),
+      ["Transactions", c.transactions], ["Suspicious transactions", c.suspicious_transactions], ["Linked to sessions with privilege evidence (account and time)", c.linked_to_sessions_with_privilege_evidence],
+      ["Rejected or stopped", c.rejected_or_stopped], ["Release attempts blocked", c.release_attempts_blocked], ["Verified ledger postings", c.ledger_posting_verified],
+      ["Settlement corroborated (independent record)", c.settled_corroborated], ["  of which no ledger posting recorded", c.settled_corroborated_without_ledger_posting], ["Unresolved", c.unresolved]])),
     h("section", {class:"card"}, h("h3", null, "Suspicious amounts by category"), (d.suspicious_amounts || []).length
       ? kv(d.suspicious_amounts.map(x => [FCAT[x.category] || x.category, x.display])) : h("p", null, "None recorded."),
       h("p", {class:"lede"}, "Per currency; never converted or added across currencies."))));

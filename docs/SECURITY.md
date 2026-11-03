@@ -187,6 +187,16 @@ identifier-like value is present.
 
 **Inputs** are read-only exports registered with custody, as for every other module. No live connection is made.
 
+**Provenance binding.** A financial conclusion may only rest on evidence inside the approved paths analysis. The
+paths report signs each source's `events_file_sha256` (authenticated encryption, so the ciphertext hash fixes the
+decrypted content), together with file and custody hashes and coverage. `tscope financial analyse` compares all of
+these with the stored state and fails closed on any difference, for example a re-ingest or an added source after the
+paths release. The financial report records the binding (`inputs.paths_binding`).
+
+**Identity joins.** A `direct` identity or VPN link is made only after the records sharing the identifier have been
+validated (same account, not failed, plausible time, unambiguous). An identifier reused by another account makes
+the link `unresolved`, so that account's MFA state or address is never attributed to the session.
+
 **Remediation** is advisory only (`executed: false, requires_authorisation: true`).
 
 See [ENTERPRISE_PROFILE.md](ENTERPRISE_PROFILE.md) and [ENTERPRISE_LIMITATIONS.md](ENTERPRISE_LIMITATIONS.md).

@@ -105,7 +105,7 @@ Sources are declared in `logs.yaml` like any Module B source (`family`, `format`
 | `approval_reference` | approval/workflow reference | `approval_ref` |
 | `amount`, `currency` | non-negative decimal and ISO 4217 code | `amount_minor` (integer minor units), `currency` |
 | `payee_reference` | payee/beneficiary reference (often an account number) | keyed fingerprint `counterparty_ref` (`CPTY-`) only |
-| `idp_correlation_id` | identity-provider correlation id carried by the session | `correlation_id` (used for `direct` identity links) |
+| `idp_correlation_id` | identity-provider correlation id carried by the session | `correlation_id` (used for `direct` identity links after validation: ENTERPRISE_PROFILE.md §5) |
 | `client_host`, `target_account` | client host; account acted upon (role assignments) | `client_host`, `target_account` |
 
 **Actions:**
@@ -147,9 +147,10 @@ The results recorded with this release are in [ENTERPRISE_ACCEPTANCE.md](ENTERPR
 
 ```
 financial_impact: settlement_corroborated
-counts: transactions 44 · suspicious 2 · linked to privileged sessions 2 · settled (independent) 43 · unresolved 0
+counts: transactions 44 · suspicious 2 · linked to sessions with privilege evidence 2 · verified ledger postings 44
+        · settled (independent) 43, of which without a recorded posting 0 · unresolved 0
 suspicious totals: settled_corroborated ZAR 1,275,400.00 · posted USD 18,500.00   (never added together)
-suspicious session FSN-…: identity direct · remote access direct · host logon correlated · privilege observed
+suspicious session FSN-…: identity direct · remote access direct · host logon correlated · privilege correlated
    reasons: supplier_outside_window, privilege_granted_before_session, signin_without_mfa, external_signin
 TXN-… settled_corroborated ZAR 1,275,400.00 — same_actor_initiated_and_approved
 TXN-… posted USD 18,500.00 — same_actor_initiated_and_approved, settlement_claimed_without_independent_evidence

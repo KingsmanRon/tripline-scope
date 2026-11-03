@@ -30,7 +30,7 @@ def full_chain(**kw):
 
 def one(events, settlements=(), **kw):
     r = T.analyse(events, list(settlements), app_source_ids={APP}, suspicious_sessions=kw.get("sus", {}),
-                  privileged_actors=kw.get("priv", set()))
+                  sessions_with_privilege_evidence=kw.get("priv", set()))
     return r, {t["transaction"]: t for t in r["transactions"]}
 
 
@@ -39,7 +39,23 @@ def test_full_chain_with_independent_settlement_is_corroborated():
     t = tx["PAY-1"]
     assert t["category"] == "settled_corroborated" and t["settlement"]["record"] == "SRC-BANK:1"
     assert all(s["verified"] for s in t["steps"]) and not t["contradictions"]
-    assert r["counts"]["settled_corroborated"] == 1 and r["counts"]["posted"] == 1
+    assert r["counts"]["settled_corroborated"] == 1 and r["counts"]["ledger_posting_verified"] == 1
+    assert t["ledger_posting_verified"] and r["counts"]["settled_corroborated_without_ledger_posting"] == 0
+    assert "posted" not in r["counts"]                       # no combined "posted incl. settled" metric
+
+
+def test_release_and_bank_settlement_without_ledger_posting_is_not_a_posting():
+    """Review P1: a settlement corroborated after release must not be reported as an observed ledger posting."""
+    r, tx = one(full_chain()[:4], [settle(1)])
+    t = tx["PAY-1"]
+    assert t["category"] == "settled_corroborated" and t["evidence_state"] == "released"
+    assert t["ledger_posting_verified"] is False
+    assert not any(s["action"] == "ledger_posted" for s in t["steps"])
+    assert r["counts"]["ledger_posting_verified"] == 0
+    assert r["counts"]["settled_corroborated"] == 1 and r["counts"]["settled_corroborated_without_ledger_posting"] == 1
+    # a ledger posting that is recorded but not verified (failed) is not counted either
+    r, tx = one(full_chain()[:4] + [ev(5, "ledger_posted", minutes=4, outcome="failure")], [settle(1)])
+    assert tx["PAY-1"]["ledger_posting_verified"] is False and r["counts"]["ledger_posting_verified"] == 0
 
 
 def test_application_settlement_claim_is_not_settlement():
@@ -178,11 +194,22 @@ def test_unknown_amount_counted_not_summed():
 def test_suspicion_and_privilege_links_and_segregation_of_duties():
     evs = [ev(1, "payment_created", actor="ACCT-x", session="FSN-s"), ev(2, "approval_submitted", minutes=1, actor="ACCT-x", session="FSN-s"),
            ev(3, "approval_completed", minutes=2, actor="ACCT-x", session="FSN-s")]
-    r, tx = one(evs, sus={"FSN-s": ["privilege_granted_before_session"]}, priv={"ACCT-x"})
+    r, tx = one(evs, sus={"FSN-s": ["privilege_granted_before_session"]}, priv={"FSN-s"})
     t = tx["PAY-1"]
-    assert t["suspicious"] and t["linked_to_privileged_session"]
+    assert t["suspicious"] and t["sessions_with_privilege_evidence"] == ["FSN-s"]
+    assert t["privilege_link"] == "correlated"
     assert "same_actor_initiated_and_approved" in t["approval_indicators"]
-    assert r["counts"]["suspicious_transactions"] == 1 and r["counts"]["linked_to_privileged_sessions"] == 1
+    assert r["counts"]["suspicious_transactions"] == 1 and r["counts"]["linked_to_sessions_with_privilege_evidence"] == 1
+
+
+def test_privileged_actor_in_another_session_does_not_link_this_transaction():
+    """Review P1: the same actor holding privileges in a different (e.g. earlier, unrelated) session does not make
+    a transaction from this session privilege-linked."""
+    evs = [ev(1, "payment_created", actor="ACCT-x", session="FSN-today")]
+    r, tx = one(evs, priv={"FSN-last-month"})                     # privilege evidence only in another session
+    t = tx["PAY-1"]
+    assert t["sessions_with_privilege_evidence"] == [] and t["privilege_link"] == "none_observed"
+    assert r["counts"]["linked_to_sessions_with_privilege_evidence"] == 0
 
 
 def test_payee_change_after_approval_and_reversal():

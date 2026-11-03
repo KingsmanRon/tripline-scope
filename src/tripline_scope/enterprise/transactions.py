@@ -14,6 +14,7 @@ Evidence categories (``CATEGORIES``), strongest first, are mutually exclusive pe
 * ``settled_corroborated`` — released, and an **independent** settlement record (a different source from the
   financial application, ``bank_settlement`` family) names the same transaction reference with the identical
   amount (minor units) and currency and a ``settled`` outcome. The application saying "settled" never suffices.
+  This category does not imply a ledger posting: ``ledger_posting_verified`` says whether one was recorded.
 * ``reversed`` — a verified reversal after posting.
 * ``posted`` — verified ledger posting; settlement not corroborated.
 * ``released_not_posted`` — verified payment release; no verified posting.
@@ -22,7 +23,9 @@ Evidence categories (``CATEGORIES``), strongest first, are mutually exclusive pe
 * ``undetermined`` — contradictory records, or actions without the record that would establish their predecessor
   (e.g. a release with no creation record), so the state cannot be established.
 
-Monetary totals are kept per (category, currency); currencies are never added together.
+Monetary totals are kept per (category, currency); currencies are never added together. A transaction is linked
+to privilege evidence only through its own sessions (``sessions_with_privilege_evidence``), never because the same
+actor held privileges at some other time.
 """
 
 from __future__ import annotations
@@ -255,8 +258,10 @@ def analyse_transaction(tx_ref: str, events: list[dict], settlements: list[dict]
         indicators.append("payee_changed_after_approval")
     if erp_settlement_claim and category != "settled_corroborated":
         indicators.append("settlement_claimed_without_independent_evidence")
+    ledger_posting_verified = any(st["verified"] and st["action"] == "ledger_posted" for st in steps)
     return {
         "transaction": tx_ref, "category": category, "evidence_state": state,
+        "ledger_posting_verified": ledger_posting_verified,
         "amount_minor": amount, "currency": currency,
         "actors": sorted(a for a in actors if a), "sessions": sorted(sessions),
         "approvers": sorted(a for a in approvers if a), "approval_completed": approved_ok,
@@ -270,9 +275,10 @@ def analyse_transaction(tx_ref: str, events: list[dict], settlements: list[dict]
 
 
 def analyse(events: list[dict], settlements: list[dict], *, app_source_ids: set[str],
-            suspicious_sessions: dict[str, list[str]], privileged_actors: set[str]) -> dict:
+            suspicious_sessions: dict[str, list[str]], sessions_with_privilege_evidence: set[str]) -> dict:
     """All transactions. ``suspicious_sessions`` maps a session ref to the reasons it is flagged;
-    ``privileged_actors`` are actor refs with observed privilege grant/use."""
+    ``sessions_with_privilege_evidence`` are the session refs whose own privilege link found privilege events for
+    that session's account inside the configured window (a *correlated* link: account and time)."""
     events, dup = dedupe(events)
     by_tx = defaultdict(list)
     no_ref = 0
@@ -289,7 +295,8 @@ def analyse(events: list[dict], settlements: list[dict], *, app_source_ids: set[
         t = analyse_transaction(ref, by_tx[ref], settle_by_tx.get(ref, []), app_source_ids=app_source_ids)
         reasons = sorted({r for s in t["sessions"] for r in suspicious_sessions.get(s, [])})
         t["suspicious_session_reasons"] = reasons
-        t["linked_to_privileged_session"] = bool(set(t["actors"]) & privileged_actors)
+        t["sessions_with_privilege_evidence"] = sorted(set(t["sessions"]) & sessions_with_privilege_evidence)
+        t["privilege_link"] = "correlated" if t["sessions_with_privilege_evidence"] else "none_observed"
         t["suspicious"] = bool(reasons) or bool(t["approval_indicators"])
         txs.append(t)
     orphan_settlements = [s["ref"] for ref, ss in settle_by_tx.items() if ref not in by_tx for s in ss]
@@ -310,10 +317,12 @@ def counts(txs: list[dict]) -> dict:
         "transactions": len(txs),
         "by_category": by_cat,
         "suspicious_transactions": len(sus),
-        "linked_to_privileged_sessions": sum(1 for t in txs if t["linked_to_privileged_session"]),
+        "linked_to_sessions_with_privilege_evidence": sum(1 for t in txs if t["sessions_with_privilege_evidence"]),
         "rejected_or_stopped": by_cat["rejected_or_stopped"],
-        "posted": by_cat["posted"] + by_cat["settled_corroborated"] + by_cat["reversed"],
+        "ledger_posting_verified": sum(1 for t in txs if t["ledger_posting_verified"]),
         "settled_corroborated": by_cat["settled_corroborated"],
+        "settled_corroborated_without_ledger_posting": sum(1 for t in txs if t["category"] == "settled_corroborated"
+                                                           and not t["ledger_posting_verified"]),
         "unresolved": by_cat["undetermined"],
         "release_attempts_blocked": sum(1 for t in txs if "release_attempt_blocked" in t["flags"]),
         "amount_totals_minor_by_category": _totals(txs),

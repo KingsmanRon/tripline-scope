@@ -28,12 +28,15 @@ def cli(argv, user=None, ok=True):
         return rc, out, err
 
 
-def build(base: Path, scenario: str, *, financial: bool = True) -> SimpleNamespace:
+def build(base: Path, scenario: str, *, financial: bool = True, mutate=None) -> SimpleNamespace:
+    """``mutate(gen_dir)`` may alter the generated logs before ingest (adversarial-input tests)."""
     env = testing.setup_installation(base / "inst", hospital="Synthetic Utility Ltd (fictional)")
     case_dir = testing.open_case(base / "inst", f"ENT-TEST-{scenario.upper()}", profile="enterprise")
     c = ["--case", str(case_dir)]
     gen = base / "gen"
     truth = ES.generate(gen, scenario)
+    if mutate:
+        mutate(gen)
     cli(["exposure", "scan", *c, "--inputs", str(gen / "estate" / "manifest.yaml")], "olivia")
     cli(["exposure", "report", *c, "--no-pdf"])
     cli(["release", *c, "--kind", "exposure", "--approver", "ines"])

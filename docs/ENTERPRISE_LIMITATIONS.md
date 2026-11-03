@@ -36,6 +36,12 @@ validated product for a customer's production environment.
     people are not resolved automatically.
   - A directory group grant is attributed to an account only through the declared `directory_members` mapping.
     Otherwise it is listed as unresolved.
+  - Shared-identifier (`direct`) joins are validated, and a correlation id that appears on another account's sign-in
+    makes the link `unresolved`. A source that legitimately reuses correlation ids across accounts therefore yields
+    fewer `direct` links, never wrong ones.
+- **Provenance binding is strict.** Any re-ingest after the paths release, even of identical files, changes the
+  encrypted event files. The financial analysis then refuses until paths is re-analysed and re-released. Cases whose
+  paths report predates this check must be re-ingested and re-released.
 - **Suspicion reasons are deliberately few and documented** (ENTERPRISE_PROFILE.md §5).
   - They are not a detection engine; absence of a reason is not evidence of legitimacy.
   - Approval indicators (segregation of duties and similar) use the application's recorded actors only.
